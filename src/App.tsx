@@ -1,5 +1,5 @@
 import { useKV } from '@github/spark/hooks'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,10 @@ import {
   TrendingDown, 
   AlertTriangle,
   Trash2,
-  DollarSign
+  DollarSign,
+  Download,
+  History,
+  RotateCcw
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -36,6 +39,21 @@ type Income = {
   extraIncome: number
 }
 
+type MonthlyData = {
+  month: string
+  year: number
+  income: Income
+  expenses: Expense[]
+  totalIncome: number
+  totalExpenses: number
+  remainingIncome: number
+}
+
+type CurrentMonth = {
+  month: string
+  year: number
+}
+
 const EXPENSE_CATEGORIES = [
   'Alimentação',
   'Transporte', 
@@ -50,9 +68,15 @@ const EXPENSE_CATEGORIES = [
 function App() {
   const [income, setIncome] = useKV<Income>('income', { salary: 0, extraIncome: 0 })
   const [expenses, setExpenses] = useKV<Expense[]>('expenses', [])
+  const [currentMonth, setCurrentMonth] = useKV<CurrentMonth>('current-month', { 
+    month: new Date().toLocaleDateString('pt-BR', { month: 'long' }), 
+    year: new Date().getFullYear() 
+  })
+  const [monthlyHistory, setMonthlyHistory] = useKV<MonthlyData[]>('monthly-history', [])
   
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false)
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   
   const [newIncome, setNewIncome] = useState<Income>(income)
   const [newExpense, setNewExpense] = useState({
@@ -62,6 +86,40 @@ function App() {
     paymentMethod: 'salary' as const,
     type: 'variable' as const
   })
+
+  // Check if month changed and reset if needed
+  useEffect(() => {
+    const now = new Date()
+    const currentMonthName = now.toLocaleDateString('pt-BR', { month: 'long' })
+    const currentYear = now.getFullYear()
+
+    if (currentMonth.month !== currentMonthName || currentMonth.year !== currentYear) {
+      // Save current month data to history before resetting
+      if (expenses.length > 0 || income.salary > 0 || income.extraIncome > 0) {
+        const totalIncome = income.salary + income.extraIncome
+        const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+        
+        const monthData: MonthlyData = {
+          month: currentMonth.month,
+          year: currentMonth.year,
+          income,
+          expenses,
+          totalIncome,
+          totalExpenses,
+          remainingIncome: totalIncome - totalExpenses
+        }
+
+        setMonthlyHistory((current) => [...current, monthData])
+      }
+
+      // Reset current month data
+      setExpenses([])
+      setIncome({ salary: 0, extraIncome: 0 })
+      setCurrentMonth({ month: currentMonthName, year: currentYear })
+      
+      toast.success(`Novo mês iniciado: ${currentMonthName} ${currentYear}`)
+    }
+  }, [currentMonth, expenses, income, setExpenses, setIncome, setCurrentMonth, setMonthlyHistory])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -136,12 +194,174 @@ function App() {
     toast.success('Despesa removida com sucesso!')
   }
 
+  const handleResetMonth = () => {
+    if (expenses.length === 0 && income.salary === 0 && income.extraIncome === 0) {
+      toast.error('Não há dados para resetar')
+      return
+    }
+
+    // Save current month to history
+    const totalIncome = income.salary + income.extraIncome
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+    
+    const monthData: MonthlyData = {
+      month: currentMonth.month,
+      year: currentMonth.year,
+      income,
+      expenses,
+      totalIncome,
+      totalExpenses,
+      remainingIncome: totalIncome - totalExpenses
+    }
+
+    setMonthlyHistory((current) => [...current, monthData])
+    
+    // Reset current data
+    setExpenses([])
+    setIncome({ salary: 0, extraIncome: 0 })
+    
+    toast.success('Mês resetado e salvo no histórico!')
+  }
+
+  const generateCSV = (data: MonthlyData) => {
+    const headers = ['Tipo', 'Nome', 'Categoria', 'Valor', 'Forma de Pagamento']
+    const rows = []
+    
+    // Add income rows
+    if (data.income.salary > 0) {
+      rows.push(['Receita', 'Salário', 'Renda', data.income.salary.toFixed(2), 'Salário'])
+    }
+    if (data.income.extraIncome > 0) {
+      rows.push(['Receita', 'Renda Extra', 'Renda', data.income.extraIncome.toFixed(2), 'Extra'])
+    }
+    
+    // Add expense rows
+    data.expenses.forEach(expense => {
+      rows.push([
+        'Despesa',
+        expense.name,
+        expense.category,
+        expense.amount.toFixed(2),
+        expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'
+      ])
+    })
+    
+    // Add summary
+    rows.push(['', '', '', '', ''])
+    rows.push(['Resumo', 'Total Receitas', '', data.totalIncome.toFixed(2), ''])
+    rows.push(['Resumo', 'Total Despesas', '', data.totalExpenses.toFixed(2), ''])
+    rows.push(['Resumo', 'Saldo', '', data.remainingIncome.toFixed(2), ''])
+    
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    return csvContent
+  }
+
+  const downloadCSV = (data: MonthlyData) => {
+    const csv = generateCSV(data)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `financeiro_${data.month}_${data.year}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+    
+    toast.success('Planilha baixada com sucesso!')
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Controle Financeiro</h1>
-          <p className="text-muted-foreground">Gerencie suas despesas fixas e variáveis</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Controle Financeiro</h1>
+              <p className="text-muted-foreground">
+                {currentMonth.month} {currentMonth.year} - Gerencie suas despesas fixas e variáveis
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <History size={16} className="mr-2" />
+                    Histórico
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Histórico Anual</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {monthlyHistory.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">
+                        Nenhum histórico disponível ainda.
+                      </p>
+                    ) : (
+                      <div className="grid gap-4">
+                        {monthlyHistory
+                          .sort((a, b) => b.year - a.year || new Date(`${b.month} 1, 2000`).getMonth() - new Date(`${a.month} 1, 2000`).getMonth())
+                          .map((data, index) => (
+                          <Card key={index} className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <h3 className="text-lg font-semibold">
+                                {data.month} {data.year}
+                              </h3>
+                              <Button
+                                onClick={() => downloadCSV(data)}
+                                variant="outline"
+                                size="sm"
+                              >
+                                <Download size={16} className="mr-2" />
+                                Baixar CSV
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                              <div className="text-center">
+                                <div className="text-sm text-muted-foreground">Receitas</div>
+                                <div className="text-lg font-semibold text-primary">
+                                  {formatCurrency(data.totalIncome)}
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-sm text-muted-foreground">Despesas</div>
+                                <div className="text-lg font-semibold text-destructive">
+                                  {formatCurrency(data.totalExpenses)}
+                                </div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-sm text-muted-foreground">Saldo</div>
+                                <div className={`text-lg font-semibold ${data.remainingIncome >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                                  {formatCurrency(data.remainingIncome)}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {data.expenses.length} despesas registradas
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <Button
+                onClick={handleResetMonth}
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+              >
+                <RotateCcw size={16} className="mr-2" />
+                Resetar Mês
+              </Button>
+            </div>
+          </div>
         </header>
 
         {/* Resumo Financeiro */}
