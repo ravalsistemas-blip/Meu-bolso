@@ -1011,6 +1011,18 @@ function App() {
                   <div className="space-y-2">
                     {variableExpenses.map((expense) => (
                       <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">{expense.name}</span>
+                            <Badge variant="outline">{expense.category}</Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
+                            <span className="flex items-center gap-1">
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
+                            </span>
+                          </div>
                         </div>
                         <Button
                           variant="ghost"
@@ -1020,18 +1032,6 @@ function App() {
                         >
                           <Trash2 size={16} />
                         </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="investment" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Investimentos ({formatCurrency(totalInvestmentExpenses)})</CardTitle>
                       </div>
                     ))}
                   </div>
