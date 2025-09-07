@@ -26,7 +26,7 @@ type Expense = {
   name: string
   amount: number
   category: string
-  paymentMethod: 'salary' | 'credit' | 'extra'
+  paymentMethod: 'salary' | 'extra'
   type: 'fixed' | 'variable'
   date: string
 }
@@ -82,7 +82,6 @@ function App() {
   const totalExpenses = totalFixedExpenses + totalVariableExpenses
   
   const salaryExpenses = expenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
-  const creditExpenses = expenses.filter(e => e.paymentMethod === 'credit').reduce((sum, e) => sum + e.amount, 0)
   const extraExpenses = expenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
   
   const totalIncome = income.salary + income.extraIncome
@@ -313,13 +312,12 @@ function App() {
                 </div>
                 <div>
                   <Label htmlFor="payment-method">Forma de Pagamento</Label>
-                  <Select value={newExpense.paymentMethod} onValueChange={(value: 'salary' | 'credit' | 'extra') => setNewExpense({ ...newExpense, paymentMethod: value })}>
+                  <Select value={newExpense.paymentMethod} onValueChange={(value: 'salary' | 'extra') => setNewExpense({ ...newExpense, paymentMethod: value })}>
                     <SelectTrigger id="payment-method">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="salary">Salário</SelectItem>
-                      <SelectItem value="credit">Cartão de Crédito</SelectItem>
                       <SelectItem value="extra">Renda Extra</SelectItem>
                     </SelectContent>
                   </Select>
@@ -413,9 +411,8 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
-                              {expense.paymentMethod === 'salary' ? 'Salário' : 
-                               expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
                         </div>
@@ -457,9 +454,8 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
-                              {expense.paymentMethod === 'salary' ? 'Salário' : 
-                               expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
                         </div>
@@ -501,9 +497,8 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
-                              {expense.paymentMethod === 'salary' ? 'Salário' : 
-                               expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
                         </div>
