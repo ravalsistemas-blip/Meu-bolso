@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Plus, 
   Wallet, 
-  CreditCard, 
   TrendingUp, 
   TrendingDown, 
   AlertTriangle,
@@ -37,11 +36,6 @@ type Income = {
   extraIncome: number
 }
 
-type CreditCard = {
-  limit: number
-  used: number
-}
-
 const EXPENSE_CATEGORIES = [
   'Alimentação',
   'Transporte', 
@@ -56,11 +50,9 @@ const EXPENSE_CATEGORIES = [
 function App() {
   const [income, setIncome] = useKV<Income>('income', { salary: 0, extraIncome: 0 })
   const [expenses, setExpenses] = useKV<Expense[]>('expenses', [])
-  const [creditCard, setCreditCard] = useKV<CreditCard>('creditCard', { limit: 0, used: 0 })
   
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false)
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
-  const [creditDialogOpen, setCreditDialogOpen] = useState(false)
   
   const [newIncome, setNewIncome] = useState<Income>(income)
   const [newExpense, setNewExpense] = useState({
@@ -70,7 +62,6 @@ function App() {
     paymentMethod: 'salary' as const,
     type: 'variable' as const
   })
-  const [newCreditLimit, setNewCreditLimit] = useState(creditCard.limit.toString())
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -97,11 +88,9 @@ function App() {
   const totalIncome = income.salary + income.extraIncome
   const remainingIncome = totalIncome - totalExpenses
   const remainingSalary = income.salary - salaryExpenses
-  const remainingCredit = creditCard.limit - creditExpenses
   const remainingExtra = income.extraIncome - extraExpenses
 
   const salaryUsagePercent = income.salary > 0 ? (salaryExpenses / income.salary) * 100 : 0
-  const creditUsagePercent = creditCard.limit > 0 ? (creditExpenses / creditCard.limit) * 100 : 0
 
   const handleSaveIncome = () => {
     setIncome(newIncome)
@@ -146,13 +135,6 @@ function App() {
   const handleDeleteExpense = (id: string) => {
     setExpenses((current) => current.filter(e => e.id !== id))
     toast.success('Despesa removida com sucesso!')
-  }
-
-  const handleSaveCreditLimit = () => {
-    const limit = parseCurrency(newCreditLimit)
-    setCreditCard((current) => ({ ...current, limit }))
-    setCreditDialogOpen(false)
-    toast.success('Limite do cartão atualizado!')
   }
 
   return (
@@ -208,12 +190,12 @@ function App() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Cartão de Crédito</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Renda Extra</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-accent font-numbers">{formatCurrency(remainingCredit)}</div>
+              <div className="text-2xl font-bold text-accent font-numbers">{formatCurrency(remainingExtra)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <CreditCard size={16} className="text-accent" />
+                <TrendingUp size={16} className="text-accent" />
                 <span className="text-sm text-muted-foreground">Disponível</span>
               </div>
             </CardContent>
@@ -221,15 +203,6 @@ function App() {
         </div>
 
         {/* Alertas */}
-        {creditUsagePercent > 80 && (
-          <Alert className="mb-6 border-destructive">
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-            <AlertDescription className="text-destructive">
-              Atenção! Você já usou {creditUsagePercent.toFixed(1)}% do limite do cartão de crédito.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {salaryUsagePercent > 90 && (
           <Alert className="mb-6 border-destructive">
             <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -240,7 +213,7 @@ function App() {
         )}
 
         {/* Controles principais */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
             <DialogTrigger asChild>
               <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
@@ -357,36 +330,6 @@ function App() {
               </div>
             </DialogContent>
           </Dialog>
-
-          <Dialog open={creditDialogOpen} onOpenChange={setCreditDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
-                <CreditCard size={24} className="mb-2" />
-                <div className="text-sm font-medium">Cartão de Crédito</div>
-                <div className="text-xs text-muted-foreground">Definir limite</div>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Configurar Cartão de Crédito</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="credit-limit">Limite do Cartão</Label>
-                  <Input
-                    id="credit-limit"
-                    type="number"
-                    placeholder="0,00"
-                    value={newCreditLimit}
-                    onChange={(e) => setNewCreditLimit(e.target.value)}
-                  />
-                </div>
-                <Button onClick={handleSaveCreditLimit} className="w-full">
-                  Salvar Limite
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {/* Indicadores de Uso */}
@@ -415,19 +358,22 @@ function App() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CreditCard size={20} />
-                Uso do Cartão
+                <TrendingUp size={20} />
+                Uso da Renda Extra
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Usado: {formatCurrency(creditExpenses)}</span>
-                  <span>Disponível: {formatCurrency(remainingCredit)}</span>
+                  <span>Usado: {formatCurrency(extraExpenses)}</span>
+                  <span>Disponível: {formatCurrency(remainingExtra)}</span>
                 </div>
-                <Progress value={Math.min(creditUsagePercent, 100)} className="h-2" />
+                <Progress 
+                  value={income.extraIncome > 0 ? Math.min((extraExpenses / income.extraIncome) * 100, 100) : 0} 
+                  className="h-2" 
+                />
                 <div className="text-xs text-muted-foreground text-center">
-                  {creditUsagePercent.toFixed(1)}% utilizado
+                  {income.extraIncome > 0 ? ((extraExpenses / income.extraIncome) * 100).toFixed(1) : 0}% utilizado
                 </div>
               </div>
             </CardContent>
@@ -467,7 +413,7 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? <CreditCard size={14} /> : <Wallet size={14} />}
+                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 
                                expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
                             </span>
@@ -511,7 +457,7 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? <CreditCard size={14} /> : <Wallet size={14} />}
+                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 
                                expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
                             </span>
@@ -555,7 +501,7 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'credit' ? <CreditCard size={14} /> : <Wallet size={14} />}
+                              {expense.paymentMethod === 'credit' ? 💳 : <Wallet size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 
                                expense.paymentMethod === 'credit' ? 'Cartão' : 'Renda Extra'}
                             </span>
