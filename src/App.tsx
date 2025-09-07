@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { 
   Plus, 
   Wallet, 
@@ -20,7 +21,10 @@ import {
   DollarSign,
   Download,
   History,
-  RotateCcw
+  RotateCcw,
+  ChatCircle,
+  Robot,
+  Copy
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -79,6 +83,7 @@ function App() {
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false)
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false)
   
   const [newIncome, setNewIncome] = useState<Income>(income)
   const [newExpense, setNewExpense] = useState({
@@ -89,6 +94,8 @@ function App() {
     type: 'variable' as const,
     investmentBalance: ''
   })
+  const [whatsappMessage, setWhatsappMessage] = useState('')
+  const [isProcessingWhatsapp, setIsProcessingWhatsapp] = useState(false)
 
   // Check if month changed and reset if needed
   useEffect(() => {
@@ -286,6 +293,95 @@ function App() {
     toast.success('Planilha baixada com sucesso!')
   }
 
+  const processWhatsappMessage = async () => {
+    if (!whatsappMessage.trim()) {
+      toast.error('Digite uma mensagem para processar')
+      return
+    }
+
+    setIsProcessingWhatsapp(true)
+
+    try {
+      const prompt = spark.llmPrompt`
+        Analise esta mensagem do WhatsApp e extraia informações financeiras para uma planilha de controle:
+
+        Mensagem: "${whatsappMessage}"
+
+        Extraia e retorne um JSON com as seguintes informações, se disponíveis:
+        - type: "income" ou "expense"
+        - name: nome da receita/despesa
+        - amount: valor numérico (apenas números)
+        - category: categoria (Alimentação, Transporte, Moradia, Saúde, Educação, Lazer, Roupas, Investimentos, Outros)
+        - expenseType: "fixed", "variable" ou "investment" (apenas para despesas)
+        - paymentMethod: "salary" ou "extra" 
+        - investmentBalance: valor do saldo (apenas para investimentos)
+
+        Exemplos de mensagens:
+        - "Gastei 150 no supermercado" → expense, variable, Alimentação
+        - "Recebi 3000 de salário" → income, salary
+        - "Paguei 800 de aluguel" → expense, fixed, Moradia  
+        - "Investi 500 na poupança, saldo 2000" → expense, investment, Investimentos
+
+        Retorne apenas o JSON válido, sem explicações.
+      `
+
+      const result = await spark.llm(prompt, 'gpt-4o-mini', true)
+      const parsedData = JSON.parse(result)
+
+      if (parsedData.type === 'income') {
+        // Processar receita
+        if (parsedData.paymentMethod === 'salary') {
+          setIncome(current => ({ ...current, salary: current.salary + parsedData.amount }))
+        } else {
+          setIncome(current => ({ ...current, extraIncome: current.extraIncome + parsedData.amount }))
+        }
+        toast.success(`Receita de ${formatCurrency(parsedData.amount)} adicionada!`)
+      } else if (parsedData.type === 'expense') {
+        // Processar despesa
+        const expense: Expense = {
+          id: Date.now().toString(),
+          name: parsedData.name || 'Despesa via WhatsApp',
+          amount: parsedData.amount,
+          category: parsedData.category || 'Outros',
+          paymentMethod: parsedData.paymentMethod || 'salary',
+          type: parsedData.expenseType || 'variable',
+          date: new Date().toISOString(),
+          investmentBalance: parsedData.investmentBalance
+        }
+
+        setExpenses(current => [...current, expense])
+        toast.success(`Despesa "${expense.name}" de ${formatCurrency(expense.amount)} adicionada!`)
+      } else {
+        toast.error('Não foi possível identificar informações financeiras na mensagem')
+      }
+
+      setWhatsappMessage('')
+      setWhatsappDialogOpen(false)
+
+    } catch (error) {
+      console.error('Erro ao processar mensagem:', error)
+      toast.error('Erro ao processar a mensagem. Tente ser mais específico.')
+    } finally {
+      setIsProcessingWhatsapp(false)
+    }
+  }
+
+  const getWhatsappExamples = () => {
+    return [
+      "Gastei R$ 45 no Uber hoje",
+      "Paguei R$ 1.200 de aluguel",
+      "Recebi R$ 3.500 de salário",
+      "Investi R$ 500 na poupança, saldo R$ 2.000",
+      "Comprei R$ 80 de comida no mercado",
+      "Freelance de R$ 800 caiu na conta"
+    ]
+  }
+
+  const copyExampleToClipboard = (example: string) => {
+    setWhatsappMessage(example)
+    toast.success('Exemplo copiado!')
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -459,7 +555,7 @@ function App() {
         )}
 
         {/* Controles principais */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
             <DialogTrigger asChild>
               <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
@@ -584,6 +680,84 @@ function App() {
                 </div>
                 <Button onClick={handleAddExpense} className="w-full">
                   Adicionar Despesa
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={whatsappDialogOpen} onOpenChange={setWhatsappDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
+                <ChatCircle size={24} className="mb-2" />
+                <div className="text-sm font-medium">WhatsApp</div>
+                <div className="text-xs text-muted-foreground">Adicionar por mensagem</div>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Robot size={20} />
+                  Adicionar via WhatsApp
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="whatsapp-message">Cole sua mensagem do WhatsApp</Label>
+                  <Textarea
+                    id="whatsapp-message"
+                    placeholder="Ex: Gastei R$ 150 no supermercado hoje"
+                    value={whatsappMessage}
+                    onChange={(e) => setWhatsappMessage(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Robot size={16} />
+                    Exemplos de mensagens que funcionam:
+                  </h4>
+                  <div className="grid gap-2">
+                    {getWhatsappExamples().map((example, index) => (
+                      <div key={index} className="flex items-center justify-between text-sm p-2 bg-background rounded border">
+                        <span className="text-muted-foreground">"{example}"</span>
+                        <Button
+                          onClick={() => copyExampleToClipboard(example)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2"
+                        >
+                          <Copy size={12} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Alert>
+                  <Robot className="h-4 w-4" />
+                  <AlertDescription>
+                    A IA irá analisar sua mensagem e extrair automaticamente o valor, categoria e tipo de transação.
+                    Seja específico sobre valores e descrições para melhores resultados.
+                  </AlertDescription>
+                </Alert>
+
+                <Button 
+                  onClick={processWhatsappMessage} 
+                  className="w-full"
+                  disabled={isProcessingWhatsapp || !whatsappMessage.trim()}
+                >
+                  {isProcessingWhatsapp ? (
+                    <>
+                      <Robot size={16} className="mr-2 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <Robot size={16} className="mr-2" />
+                      Processar Mensagem
+                    </>
+                  )}
                 </Button>
               </div>
             </DialogContent>
