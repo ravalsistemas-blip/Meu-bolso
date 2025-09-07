@@ -146,6 +146,37 @@ function App() {
   const variableExpenses = expenses.filter(e => e.type === 'variable')
   const investmentExpenses = expenses.filter(e => e.type === 'investment')
   
+  // Calculate consolidated investment balances
+  const getConsolidatedInvestments = () => {
+    const investmentMap = new Map<string, { totalInvested: number, currentBalance: number, lastEntry: Expense }>()
+    
+    investmentExpenses.forEach(expense => {
+      const key = expense.name.toLowerCase()
+      if (investmentMap.has(key)) {
+        const existing = investmentMap.get(key)!
+        existing.totalInvested += expense.amount
+        if (expense.investmentBalance !== undefined) {
+          existing.currentBalance = expense.investmentBalance
+          existing.lastEntry = expense
+        }
+      } else {
+        investmentMap.set(key, {
+          totalInvested: expense.amount,
+          currentBalance: expense.investmentBalance || expense.amount,
+          lastEntry: expense
+        })
+      }
+    })
+    
+    return Array.from(investmentMap.entries()).map(([name, data]) => ({
+      name: data.lastEntry.name,
+      totalInvested: data.totalInvested,
+      currentBalance: data.currentBalance,
+      category: data.lastEntry.category,
+      paymentMethod: data.lastEntry.paymentMethod
+    }))
+  }
+  
   const totalFixedExpenses = fixedExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalVariableExpenses = variableExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalInvestmentExpenses = investmentExpenses.reduce((sum, e) => sum + e.amount, 0)
@@ -179,9 +210,24 @@ function App() {
       return
     }
 
-    const investmentBalance = newExpense.type === 'investment' 
-      ? parseCurrency(newExpense.investmentBalance) 
-      : undefined
+    let investmentBalance: number | undefined
+
+    if (newExpense.type === 'investment') {
+      // Check if this investment already exists
+      const existingInvestment = expenses.find(e => 
+        e.type === 'investment' && 
+        e.name.toLowerCase() === newExpense.name.toLowerCase()
+      )
+
+      if (existingInvestment && existingInvestment.investmentBalance !== undefined) {
+        // Add to existing balance
+        investmentBalance = existingInvestment.investmentBalance + amount
+      } else {
+        // First time or no existing balance - use provided initial balance or amount as balance
+        const initialBalance = parseCurrency(newExpense.investmentBalance)
+        investmentBalance = initialBalance > 0 ? initialBalance : amount
+      }
+    }
 
     const expense: Expense = {
       id: Date.now().toString(),
@@ -204,7 +250,7 @@ function App() {
       investmentBalance: ''
     })
     setExpenseDialogOpen(false)
-    toast.success('Despesa adicionada com sucesso!')
+    toast.success(newExpense.type === 'investment' ? 'Investimento adicionado com sucesso!' : 'Despesa adicionada com sucesso!')
   }
 
   const handleDeleteExpense = (id: string) => {
@@ -346,7 +392,19 @@ function App() {
           paymentMethod: parsedData.paymentMethod || 'salary',
           type: parsedData.expenseType || 'variable',
           date: new Date().toISOString(),
-          investmentBalance: parsedData.investmentBalance
+          investmentBalance: parsedData.expenseType === 'investment' ? (() => {
+            // For investments via WhatsApp, handle automatic balance calculation
+            const existingInvestment = expenses.find(e => 
+              e.type === 'investment' && 
+              e.name.toLowerCase() === (parsedData.name || 'Despesa via WhatsApp').toLowerCase()
+            )
+            
+            if (existingInvestment && existingInvestment.investmentBalance !== undefined) {
+              return existingInvestment.investmentBalance + parsedData.amount
+            } else {
+              return parsedData.investmentBalance || parsedData.amount
+            }
+          })() : undefined
         }
 
         setExpenses(current => [...current, expense])
@@ -654,18 +712,39 @@ function App() {
                     </SelectContent>
                   </Select>
                 </div>
-                {newExpense.type === 'investment' && (
-                  <div>
-                    <Label htmlFor="investment-balance">Saldo do Investimento</Label>
-                    <Input
-                      id="investment-balance"
-                      type="number"
-                      placeholder="0,00"
-                      value={newExpense.investmentBalance}
-                      onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
-                    />
-                  </div>
-                )}
+                {newExpense.type === 'investment' && (() => {
+                  // Check if this investment already exists
+                  const existingInvestment = expenses.find(e => 
+                    e.type === 'investment' && 
+                    e.name.toLowerCase() === newExpense.name.toLowerCase()
+                  )
+                  
+                  // Only show balance field for first investment of this name
+                  return !existingInvestment ? (
+                    <div>
+                      <Label htmlFor="investment-balance">Saldo Inicial do Investimento</Label>
+                      <Input
+                        id="investment-balance"
+                        type="number"
+                        placeholder="0,00 (opcional - se vazio, usará o valor investido)"
+                        value={newExpense.investmentBalance}
+                        onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
+                      />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Deixe vazio para usar o valor do investimento como saldo inicial
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-muted/50 rounded-lg border">
+                      <div className="text-sm font-medium text-foreground mb-1">
+                        ✅ Investimento existente encontrado
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        O saldo será atualizado automaticamente adicionando este valor ao saldo atual.
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div>
                   <Label htmlFor="payment-method">Forma de Pagamento</Label>
                   <Select value={newExpense.paymentMethod} onValueChange={(value: 'salary' | 'extra') => setNewExpense({ ...newExpense, paymentMethod: value })}>
@@ -972,38 +1051,74 @@ function App() {
                     Nenhum investimento cadastrado.
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {investmentExpenses.map((expense) => (
-                      <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">{expense.name}</span>
-                            <Badge variant="default" className="bg-accent text-accent-foreground">Investimento</Badge>
-                            <Badge variant="outline">{expense.category}</Badge>
+                  <div className="space-y-4">
+                    {/* Consolidated view */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-muted-foreground">Resumo por Investimento</h4>
+                      {getConsolidatedInvestments().map((investment, index) => (
+                        <div key={index} className="p-4 border rounded-lg bg-card/50">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{investment.name}</span>
+                              <Badge variant="default" className="bg-accent text-accent-foreground">Investimento</Badge>
+                              <Badge variant="outline">{investment.category}</Badge>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="font-numbers font-medium">Aplicado: {formatCurrency(expense.amount)}</span>
-                            {expense.investmentBalance && (
-                              <span className="font-numbers font-medium text-primary">
-                                Saldo: {formatCurrency(expense.investmentBalance)}
-                              </span>
-                            )}
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Total Investido:</span>
+                              <div className="font-numbers font-medium">{formatCurrency(investment.totalInvested)}</div>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Saldo Atual:</span>
+                              <div className="font-numbers font-medium text-primary">{formatCurrency(investment.currentBalance)}</div>
+                            </div>
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
-                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
+                              {investment.paymentMethod === 'salary' ? <Wallet size={12} /> : <TrendingUp size={12} />}
+                              {investment.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteExpense(expense.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+
+                    {/* Individual transactions */}
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-muted-foreground">Histórico de Transações</h4>
+                      {investmentExpenses.map((expense) => (
+                        <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium">{expense.name}</span>
+                              <Badge variant="default" className="bg-accent text-accent-foreground">Investimento</Badge>
+                              <Badge variant="outline">{expense.category}</Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span className="font-numbers font-medium">Aplicado: {formatCurrency(expense.amount)}</span>
+                              {expense.investmentBalance && (
+                                <span className="font-numbers font-medium text-primary">
+                                  Saldo após: {formatCurrency(expense.investmentBalance)}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                                {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteExpense(expense.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
