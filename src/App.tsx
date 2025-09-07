@@ -30,8 +30,9 @@ type Expense = {
   amount: number
   category: string
   paymentMethod: 'salary' | 'extra'
-  type: 'fixed' | 'variable'
+  type: 'fixed' | 'variable' | 'investment'
   date: string
+  investmentBalance?: number
 }
 
 type Income = {
@@ -62,6 +63,7 @@ const EXPENSE_CATEGORIES = [
   'Educação',
   'Lazer',
   'Roupas',
+  'Investimentos',
   'Outros'
 ]
 
@@ -84,7 +86,8 @@ function App() {
     amount: '',
     category: '',
     paymentMethod: 'salary' as const,
-    type: 'variable' as const
+    type: 'variable' as const,
+    investmentBalance: ''
   })
 
   // Check if month changed and reset if needed
@@ -134,10 +137,12 @@ function App() {
 
   const fixedExpenses = expenses.filter(e => e.type === 'fixed')
   const variableExpenses = expenses.filter(e => e.type === 'variable')
+  const investmentExpenses = expenses.filter(e => e.type === 'investment')
   
   const totalFixedExpenses = fixedExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalVariableExpenses = variableExpenses.reduce((sum, e) => sum + e.amount, 0)
-  const totalExpenses = totalFixedExpenses + totalVariableExpenses
+  const totalInvestmentExpenses = investmentExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const totalExpenses = totalFixedExpenses + totalVariableExpenses + totalInvestmentExpenses
   
   const salaryExpenses = expenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
   const extraExpenses = expenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
@@ -167,6 +172,10 @@ function App() {
       return
     }
 
+    const investmentBalance = newExpense.type === 'investment' 
+      ? parseCurrency(newExpense.investmentBalance) 
+      : undefined
+
     const expense: Expense = {
       id: Date.now().toString(),
       name: newExpense.name,
@@ -174,7 +183,8 @@ function App() {
       category: newExpense.category,
       paymentMethod: newExpense.paymentMethod,
       type: newExpense.type,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      investmentBalance
     }
 
     setExpenses((current) => [...current, expense])
@@ -183,7 +193,8 @@ function App() {
       amount: '',
       category: '',
       paymentMethod: 'salary',
-      type: 'variable'
+      type: 'variable',
+      investmentBalance: ''
     })
     setExpenseDialogOpen(false)
     toast.success('Despesa adicionada com sucesso!')
@@ -224,33 +235,34 @@ function App() {
   }
 
   const generateCSV = (data: MonthlyData) => {
-    const headers = ['Tipo', 'Nome', 'Categoria', 'Valor', 'Forma de Pagamento']
+    const headers = ['Tipo', 'Nome', 'Categoria', 'Valor', 'Forma de Pagamento', 'Saldo Investimento']
     const rows = []
     
     // Add income rows
     if (data.income.salary > 0) {
-      rows.push(['Receita', 'Salário', 'Renda', data.income.salary.toFixed(2), 'Salário'])
+      rows.push(['Receita', 'Salário', 'Renda', data.income.salary.toFixed(2), 'Salário', ''])
     }
     if (data.income.extraIncome > 0) {
-      rows.push(['Receita', 'Renda Extra', 'Renda', data.income.extraIncome.toFixed(2), 'Extra'])
+      rows.push(['Receita', 'Renda Extra', 'Renda', data.income.extraIncome.toFixed(2), 'Extra', ''])
     }
     
     // Add expense rows
     data.expenses.forEach(expense => {
       rows.push([
-        'Despesa',
+        expense.type === 'investment' ? 'Investimento' : 'Despesa',
         expense.name,
         expense.category,
         expense.amount.toFixed(2),
-        expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'
+        expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra',
+        expense.investmentBalance ? expense.investmentBalance.toFixed(2) : ''
       ])
     })
     
     // Add summary
-    rows.push(['', '', '', '', ''])
-    rows.push(['Resumo', 'Total Receitas', '', data.totalIncome.toFixed(2), ''])
-    rows.push(['Resumo', 'Total Despesas', '', data.totalExpenses.toFixed(2), ''])
-    rows.push(['Resumo', 'Saldo', '', data.remainingIncome.toFixed(2), ''])
+    rows.push(['', '', '', '', '', ''])
+    rows.push(['Resumo', 'Total Receitas', '', data.totalIncome.toFixed(2), '', ''])
+    rows.push(['Resumo', 'Total Despesas', '', data.totalExpenses.toFixed(2), '', ''])
+    rows.push(['Resumo', 'Saldo', '', data.remainingIncome.toFixed(2), '', ''])
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
     return csvContent
@@ -365,7 +377,7 @@ function App() {
         </header>
 
         {/* Resumo Financeiro */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${totalInvestmentExpenses > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-8`}>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Renda Total</CardTitle>
@@ -419,6 +431,21 @@ function App() {
               </div>
             </CardContent>
           </Card>
+
+          {totalInvestmentExpenses > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Investido</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-secondary font-numbers">{formatCurrency(totalInvestmentExpenses)}</div>
+                <div className="flex items-center gap-1 mt-1">
+                  <TrendingUp size={16} className="text-secondary" />
+                  <span className="text-sm text-muted-foreground">Aplicado</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Alertas */}
@@ -520,16 +547,29 @@ function App() {
                 </div>
                 <div>
                   <Label htmlFor="expense-type">Tipo</Label>
-                  <Select value={newExpense.type} onValueChange={(value: 'fixed' | 'variable') => setNewExpense({ ...newExpense, type: value })}>
+                  <Select value={newExpense.type} onValueChange={(value: 'fixed' | 'variable' | 'investment') => setNewExpense({ ...newExpense, type: value })}>
                     <SelectTrigger id="expense-type">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="fixed">Despesa Fixa</SelectItem>
                       <SelectItem value="variable">Despesa Variável</SelectItem>
+                      <SelectItem value="investment">Investimento</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {newExpense.type === 'investment' && (
+                  <div>
+                    <Label htmlFor="investment-balance">Saldo do Investimento</Label>
+                    <Input
+                      id="investment-balance"
+                      type="number"
+                      placeholder="0,00"
+                      value={newExpense.investmentBalance}
+                      onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
+                    />
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="payment-method">Forma de Pagamento</Label>
                   <Select value={newExpense.paymentMethod} onValueChange={(value: 'salary' | 'extra') => setNewExpense({ ...newExpense, paymentMethod: value })}>
@@ -600,10 +640,11 @@ function App() {
 
         {/* Lista de Despesas */}
         <Tabs defaultValue="all" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="all">Todas</TabsTrigger>
             <TabsTrigger value="fixed">Fixas</TabsTrigger>
             <TabsTrigger value="variable">Variáveis</TabsTrigger>
+            <TabsTrigger value="investment">Investimentos</TabsTrigger>
           </TabsList>
           
           <TabsContent value="all" className="space-y-4">
@@ -623,13 +664,21 @@ function App() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="font-medium">{expense.name}</span>
-                            <Badge variant={expense.type === 'fixed' ? 'default' : 'secondary'}>
-                              {expense.type === 'fixed' ? 'Fixa' : 'Variável'}
+                            <Badge variant={expense.type === 'fixed' ? 'default' : expense.type === 'investment' ? 'default' : 'secondary'} 
+                                   className={expense.type === 'investment' ? 'bg-accent text-accent-foreground' : ''}>
+                              {expense.type === 'fixed' ? 'Fixa' : expense.type === 'investment' ? 'Investimento' : 'Variável'}
                             </Badge>
                             <Badge variant="outline">{expense.category}</Badge>
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
+                            <span className="font-numbers font-medium">
+                              {expense.type === 'investment' ? 'Aplicado: ' : ''}{formatCurrency(expense.amount)}
+                            </span>
+                            {expense.type === 'investment' && expense.investmentBalance && (
+                              <span className="font-numbers font-medium text-primary">
+                                Saldo: {formatCurrency(expense.investmentBalance)}
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
@@ -716,6 +765,55 @@ function App() {
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
+                            <span className="flex items-center gap-1">
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="investment" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Investimentos ({formatCurrency(totalInvestmentExpenses)})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {investmentExpenses.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhum investimento cadastrado.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {investmentExpenses.map((expense) => (
+                      <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium">{expense.name}</span>
+                            <Badge variant="default" className="bg-accent text-accent-foreground">Investimento</Badge>
+                            <Badge variant="outline">{expense.category}</Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="font-numbers font-medium">Aplicado: {formatCurrency(expense.amount)}</span>
+                            {expense.investmentBalance && (
+                              <span className="font-numbers font-medium text-primary">
+                                Saldo: {formatCurrency(expense.investmentBalance)}
+                              </span>
+                            )}
                             <span className="flex items-center gap-1">
                               {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
