@@ -9,11 +9,14 @@ import { Eye, EyeSlash, Wallet, TrendUp, ShieldCheck, Clock } from '@phosphor-ic
 import { useAuth } from '@/hooks/useAuth'
 
 export function AuthPage() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, resendConfirmation } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [resendEmail, setResendEmail] = useState('')
+  const [showResendForm, setShowResendForm] = useState(false)
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('')
@@ -29,11 +32,16 @@ export function AuthPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     const { error } = await signIn(loginEmail, loginPassword)
     
     if (error) {
-      setError(error.message)
+      if (error.message.includes('Email not confirmed')) {
+        setError('Email não confirmado. Verifique sua caixa de entrada e clique no link de confirmação.')
+      } else {
+        setError(error.message)
+      }
     }
     
     setLoading(false)
@@ -43,6 +51,7 @@ export function AuthPage() {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setSuccess(null)
 
     if (registerPassword !== confirmPassword) {
       setError('As senhas não coincidem')
@@ -56,14 +65,40 @@ export function AuthPage() {
       return
     }
 
-    const { error } = await signUp(registerEmail, registerPassword, fullName)
+    const { error, data } = await signUp(registerEmail, registerPassword, fullName)
     
     if (error) {
       setError(error.message)
     } else {
-      setError(null)
-      // Show success message
-      alert('Conta criada com sucesso! Verifique seu email para confirmar a conta.')
+      if (data?.user && !data.user.email_confirmed_at) {
+        setSuccess('Conta criada com sucesso! Verifique seu email para confirmar a conta antes de fazer login.')
+        // Clear form
+        setRegisterEmail('')
+        setRegisterPassword('')
+        setConfirmPassword('')
+        setFullName('')
+      } else {
+        setSuccess('Conta criada e confirmada com sucesso!')
+      }
+    }
+    
+    setLoading(false)
+  }
+
+  const handleResendConfirmation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    const { error } = await resendConfirmation(resendEmail)
+    
+    if (error) {
+      setError(error.message)
+    } else {
+      setSuccess('Email de confirmação reenviado! Verifique sua caixa de entrada.')
+      setResendEmail('')
+      setShowResendForm(false)
     }
     
     setLoading(false)
@@ -155,15 +190,24 @@ export function AuthPage() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="login" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="login">Entrar</TabsTrigger>
                     <TabsTrigger value="register">Criar Conta</TabsTrigger>
+                    <TabsTrigger value="resend">Reenviar Email</TabsTrigger>
                   </TabsList>
 
                   {error && (
                     <Alert className="border-red-200 bg-red-50">
                       <AlertDescription className="text-red-800">
                         {error}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {success && (
+                    <Alert className="border-green-200 bg-green-50">
+                      <AlertDescription className="text-green-800">
+                        {success}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -309,6 +353,37 @@ export function AuthPage() {
                         {loading ? 'Criando conta...' : 'Criar Conta'}
                       </Button>
                     </form>
+                  </TabsContent>
+
+                  {/* Resend Confirmation Tab */}
+                  <TabsContent value="resend" className="space-y-4">
+                    <form onSubmit={handleResendConfirmation} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="resend-email">Email para reenvio</Label>
+                        <Input
+                          id="resend-email"
+                          type="email"
+                          placeholder="Seu email de cadastro"
+                          value={resendEmail}
+                          onChange={(e) => setResendEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <Button 
+                        type="submit"
+                        className="w-full h-11 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+                        disabled={loading}
+                      >
+                        {loading ? 'Reenviando...' : 'Reenviar Email de Confirmação'}
+                      </Button>
+                    </form>
+
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">
+                        Não recebeu o email de confirmação? Digite seu email acima para reenviar.
+                      </p>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>

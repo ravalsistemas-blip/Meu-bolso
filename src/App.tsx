@@ -32,6 +32,7 @@ import { ConsolidatedSpreadsheet } from './components/ConsolidatedSpreadsheet'
 import { spreadsheetSync } from './lib/spreadsheet-sync'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthPage } from '@/components/AuthPage'
+import { AuthCallback } from '@/components/AuthCallback'
 import { AppHeader } from '@/components/AppHeader'
 import { AdminPage } from '@/components/AdminPage'
 
@@ -81,6 +82,16 @@ const EXPENSE_CATEGORIES = [
 function App() {
   const { user, loading } = useAuth()
   const [currentView, setCurrentView] = useState<'app' | 'admin'>('app')
+  
+  // Check if this is an auth callback
+  const isAuthCallback = window.location.hash.includes('access_token') && 
+                        (window.location.hash.includes('type=signup') || 
+                         window.location.hash.includes('type=email_change'))
+  
+  // Show auth callback page if this is a callback
+  if (isAuthCallback) {
+    return <AuthCallback />
+  }
   
   // Show loading spinner while checking auth
   if (loading) {
