@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 
@@ -21,16 +21,37 @@ export function useRealtimeData<T extends { user_id: string }>(
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastFetchRef = useRef<number>(0)
 
-  const fetchData = async () => {
+  // Debounced fetch function to prevent rate limiting
+  const fetchData = useCallback(async (immediate = false) => {
     if (!user) {
       setData([])
       setLoading(false)
       return
     }
 
+    // Rate limiting: minimum 1 second between fetches unless immediate
+    const now = Date.now()
+    const timeSinceLastFetch = now - lastFetchRef.current
+    const minInterval = 1000 // 1 second
+
+    if (!immediate && timeSinceLastFetch < minInterval) {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
+      }
+      
+      fetchTimeoutRef.current = setTimeout(() => {
+        fetchData(true)
+      }, minInterval - timeSinceLastFetch)
+      return
+    }
+
     try {
       setLoading(true)
+      lastFetchRef.current = Date.now()
+      
       const { data: result, error } = await supabase
         .from(table)
         .select(select)
@@ -42,19 +63,33 @@ export function useRealtimeData<T extends { user_id: string }>(
       setError(null)
     } catch (err) {
       console.error(`Error fetching ${table}:`, err)
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      
+      // Handle rate limit errors gracefully
+      if (errorMessage.includes('rate limit')) {
+        setError('Rate limit reached. Retrying in a moment...')
+        // Retry after 5 seconds for rate limit errors
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current)
+        }
+        fetchTimeoutRef.current = setTimeout(() => {
+          fetchData(true)
+        }, 5000)
+      } else {
+        setError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [user, table, select])
 
   useEffect(() => {
     if (!user) return
 
     // Initial fetch
-    fetchData()
+    fetchData(true)
 
-    // Subscribe to real-time changes
+    // Subscribe to real-time changes with debounced updates
     const subscription = supabase
       .channel(`realtime_${table}_${user.id}`)
       .on(
@@ -68,22 +103,25 @@ export function useRealtimeData<T extends { user_id: string }>(
         (payload) => {
           console.log(`Real-time change in ${table}:`, payload)
           
-          // Refresh data when changes occur
-          fetchData()
+          // Debounced refresh to prevent rate limiting
+          fetchData(false)
         }
       )
       .subscribe()
 
     return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current)
+      }
       subscription.unsubscribe()
     }
-  }, [user, table, select])
+  }, [user, table, select, fetchData])
 
   return {
     data,
     loading,
     error,
-    refresh: fetchData
+    refresh: () => fetchData(true)
   }
 }
 

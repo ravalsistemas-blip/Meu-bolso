@@ -1,4 +1,3 @@
-import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, PluginOption } from "vite";
 
@@ -12,7 +11,6 @@ const projectRoot = process.env.PROJECT_ROOT || import.meta.dirname
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(),
     // DO NOT REMOVE
     createIconImportProxy() as PluginOption,
     sparkPlugin() as PluginOption,
@@ -22,4 +20,27 @@ export default defineConfig({
       '@': resolve(projectRoot, 'src')
     }
   },
+  css: {
+    devSourcemap: true,
+    preprocessorOptions: {
+      scss: {
+        additionalData: '@use "@/styles/variables.scss" as *;'
+      }
+    }
+  },
+  build: {
+    cssMinify: false, // Desabilitar minificação CSS para preservar !important
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      }
+    }
+  },
+  server: {
+    port: 3000,
+    host: true,
+    hmr: {
+      port: 3000
+    }
+  }
 });

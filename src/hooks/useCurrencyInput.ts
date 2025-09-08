@@ -96,29 +96,41 @@ export function useSimpleCurrencyInput(initialValue: number = 0) {
   )
 
   const handleChange = useCallback((inputValue: string) => {
-    // Remove tudo que não é número ou vírgula/ponto
-    let cleaned = inputValue.replace(/[^\d,]/g, '')
+    // Permite apenas números, vírgulas e pontos
+    const allowedChars = inputValue.replace(/[^0-9.,]/g, '');
     
-    // Se tiver vírgula, mantém apenas a primeira
-    const commaIndex = cleaned.indexOf(',')
-    if (commaIndex !== -1) {
-      cleaned = cleaned.substring(0, commaIndex + 1) + cleaned.substring(commaIndex + 1).replace(/,/g, '')
-      
-      // Limita a 2 casas decimais após a vírgula
-      const parts = cleaned.split(',')
-      if (parts[1] && parts[1].length > 2) {
-        parts[1] = parts[1].substring(0, 2)
-        cleaned = parts.join(',')
-      }
+    // Se estiver vazio, limpa o estado
+    if (allowedChars === '') {
+      setValue('');
+      return;
     }
 
-    // Adiciona pontos para milhares se não tiver vírgula
-    if (!cleaned.includes(',') && cleaned.length > 3) {
-      cleaned = cleaned.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    // Para formatação automática, remove tudo que não é dígito
+    const numbersOnly = allowedChars.replace(/\D/g, '');
+    
+    if (numbersOnly === '') {
+      setValue('');
+      return;
     }
 
-    setValue(cleaned)
-  }, [])
+    // Se tem menos de 3 dígitos, trata como entrada direta
+    if (numbersOnly.length <= 2) {
+      setValue(numbersOnly);
+      return;
+    }
+
+    // Para 3+ dígitos, trata como centavos e formata
+    const valueInCents = parseInt(numbersOnly, 10);
+    const valueInReais = valueInCents / 100;
+
+    // Formata para o padrão brasileiro (ex: "1.234,56")
+    const formattedValue = new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(valueInReais);
+
+    setValue(formattedValue);
+  }, []);
 
   const getNumericValue = useCallback((): number => {
     return parseCurrency(value)

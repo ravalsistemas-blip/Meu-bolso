@@ -1,0 +1,91 @@
+/* Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mantém as cores originais - apenas corrige inputs para funcionarem */
+
+/* Cores específicas para valores financeiros */
+.text-income {
+  color: #059669 !important; /* Verde para receitas */
+}
+
+.text-expense {
+  color: #dc2626 !important; /* Vermelho para gastos */
+}
+
+.text-extra-income {
+  color: #ea580c !important; /* Laranja para renda extra */
+}
+
+.text-available {
+  color: #16a34a !important; /* Verde para valores disponíveis */
+}
+
+/* Correção DEFINITIVA para inputs funcionarem */
+input,
+input[type="text"], 
+input[type="number"], 
+input[inputmode="numeric"],
+.currency-input,
+input.currency-input,
+[data-slot="input"] {
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default !important;
+  -khtml-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  cursor: text !important;
+  touch-action: manipulation !important;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Garantir que os inputs sejam clicáveis e editáveis */
+input:focus,
+input:active,
+input:hover {
+  pointer-events: auto !important;
+  user-select: text !important;
+  cursor: text !important;
+}
+
+/* Desabilitar qualquer overlay que possa estar bloqueando */
+input::before,
+input::after {
+  display: none !important;
+}
+
+/* Forçar que inputs sejam interativos */
+[data-slot="input"] {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Remove setas dos inputs number globalmente - FORMATAÇÃO AUTOMÁTICA */
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
+}
+
+/* Classe para inputs monetários - FORMATAÇÃO AUTOMÁTICA */
+.currency-input {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
+.currency-input::-webkit-outer-spin-button,
+.currency-input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
+}

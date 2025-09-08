@@ -24,14 +24,18 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
 
     // Sincroniza com valor externo
     React.useEffect(() => {
-      if (value !== getNumericValue()) {
+      const currentNumeric = getNumericValue()
+      if (value !== currentNumeric) {
         setNumericValue(value)
       }
     }, [value, getNumericValue, setNumericValue])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setValue(e.target.value)
-      const numericValue = getNumericValue()
+      const inputValue = e.target.value
+      setValue(inputValue)
+      
+      // Converte para número e chama callback
+      const numericValue = parseCurrency(inputValue)
       onValueChange?.(numericValue)
     }
 
@@ -40,10 +44,36 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
       onValueChange?.(numericValue)
     }
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // Permite: backspace, delete, tab, escape, enter, números, vírgula, ponto
+      const allowedKeys = [
+        'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+        'Home', 'End'
+      ]
+      
+      const isNumber = /^[0-9]$/.test(e.key)
+      const isCommaOrDot = /^[,.]$/.test(e.key)
+      
+      if (!allowedKeys.includes(e.key) && !isNumber && !isCommaOrDot) {
+        e.preventDefault()
+      }
+    }
+
+    // Função auxiliar para converter string para número
+    const parseCurrency = (str: string): number => {
+      if (!str) return 0
+      const cleanValue = str
+        .replace(/[^\d.,]/g, '')
+        .replace(/\./g, '')
+        .replace(',', '.')
+      return parseFloat(cleanValue) || 0
+    }
+
     return (
       <div className="relative">
         {showCurrencySymbol && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground pointer-events-none z-10">
             R$
           </div>
         )}
@@ -54,6 +84,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
           value={displayValue}
           onChange={handleChange}
           onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn(
             // Remove setas do input number

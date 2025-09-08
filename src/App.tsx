@@ -26,7 +26,38 @@ import {
   ChatCircle,
   Robot,
   Copy,
-  ChartLine
+  ChartLine,
+  // Ícones adicionais para melhor interface
+  PiggyBank,
+  CreditCard,
+  Bank,
+  Receipt,
+  Calculator,
+  Target,
+  Calendar,
+  Circle,
+  Minus,
+  PlusCircle,
+  MinusCircle,
+  Eye,
+  EyeSlash,
+  User,
+  Users,
+  Building,
+  Car,
+  Heart,
+  GraduationCap,
+  GameController,
+  TShirt,
+  ShoppingCart,
+  Coffee,
+  Wrench,
+  Briefcase,
+  Gift,
+  Star,
+  CheckCircle,
+  XCircle,
+  Info
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { formatCurrency, formatDate, formatPercentage } from '@/lib/formatters'
@@ -152,7 +183,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   }
   const safeMonthlyHistory = monthlyHistory || []
   
-  const [newIncome, setNewIncome] = useState<Income>(safeIncome)
+  const [newIncome, setNewIncome] = useState<Income>({ salary: 0, extraIncome: 0 })
   const [newExpense, setNewExpense] = useState<{
     name: string
     amount: string
@@ -170,6 +201,13 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   })
   const [whatsappMessage, setWhatsappMessage] = useState('')
   const [isProcessingWhatsapp, setIsProcessingWhatsapp] = useState(false)
+
+  // Sync newIncome when dialog opens
+  useEffect(() => {
+    if (incomeDialogOpen) {
+      setNewIncome(safeIncome)
+    }
+  }, [incomeDialogOpen, safeIncome])
 
   // Check if month changed and reset if needed
   useEffect(() => {
@@ -211,7 +249,13 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   }, [safeIncome, safeExpenses, safeMonthlyHistory])
 
   const parseCurrency = (value: string) => {
-    return parseFloat(value.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
+    if (!value || value === '') return 0
+    // Remove tudo exceto números, vírgulas e pontos
+    const cleanValue = value.toString()
+      .replace(/[^\d.,]/g, '')
+      .replace(/\./g, '') // Remove pontos de milhares
+      .replace(',', '.') // Converte vírgula decimal para ponto
+    return parseFloat(cleanValue) || 0
   }
 
   const fixedExpenses = safeExpenses.filter(e => e.type === 'fixed')
@@ -359,7 +403,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
     const expenseToDelete = safeExpenses.find(e => e.id === id)
     const updatedExpenses = safeExpenses.filter(e => e.id !== id)
     
-    setExpenses((current) => ((current || []).filter(e => e.id !== id)))
+    setExpenses((current) => (current || []).filter(e => e.id !== id))
     
     // Sync with spreadsheet system
     if (expenseToDelete) {
@@ -577,12 +621,15 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
         <div className={`grid grid-cols-1 md:grid-cols-2 ${totalInvestmentExpenses > 0 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4 mb-8`}>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Renda Total</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Wallet size={16} />
+                Renda Total
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary font-numbers">{formatCurrency(totalIncome)}</div>
+              <div className="text-2xl font-bold font-numbers text-income">{formatCurrency(totalIncome)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendUp size={16} className="text-primary" />
+                <TrendUp size={16} />
                 <span className="text-sm text-muted-foreground">Mensal</span>
               </div>
             </CardContent>
@@ -590,12 +637,15 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Gasto</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <MinusCircle size={16} />
+                Total Gasto
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-destructive font-numbers">{formatCurrency(totalExpenses)}</div>
+              <div className="text-2xl font-bold font-numbers text-expense">{formatCurrency(totalExpenses)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendDown size={16} className="text-destructive" />
+                <TrendDown size={16} />
                 <span className="text-sm text-muted-foreground">Este mês</span>
               </div>
             </CardContent>
@@ -603,14 +653,17 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Saldo Restante</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <PiggyBank size={16} />
+                Saldo Restante
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold font-numbers ${remainingIncome >= 0 ? 'text-primary' : 'text-destructive'}`}>
+              <div className={`text-2xl font-bold font-numbers text-available`}>
                 {formatCurrency(remainingIncome)}
               </div>
               <div className="flex items-center gap-1 mt-1">
-                <Wallet size={16} className={remainingIncome >= 0 ? 'text-primary' : 'text-destructive'} />
+                <Wallet size={16} />
                 <span className="text-sm text-muted-foreground">Disponível</span>
               </div>
             </CardContent>
@@ -618,12 +671,15 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Renda Extra</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <PlusCircle size={16} />
+                Renda Extra
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-accent font-numbers">{formatCurrency(remainingExtra)}</div>
+              <div className="text-2xl font-bold font-numbers text-extra-income">{formatCurrency(remainingExtra)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendUp size={16} className="text-accent" />
+                <TrendUp size={16} />
                 <span className="text-sm text-muted-foreground">Disponível</span>
               </div>
             </CardContent>
@@ -632,12 +688,15 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
           {totalInvestmentExpenses > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Investido</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Target size={16} />
+                  Total Investido
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-secondary font-numbers">{formatCurrency(totalInvestmentExpenses)}</div>
+                <div className="text-2xl font-bold font-numbers text-income">{formatCurrency(totalInvestmentExpenses)}</div>
                 <div className="flex items-center gap-1 mt-1">
-                  <TrendUp size={16} className="text-secondary" />
+                  <TrendUp size={16} />
                   <span className="text-sm text-muted-foreground">Aplicado</span>
                 </div>
               </CardContent>
@@ -659,10 +718,10 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
+              <Button className="h-20 text-left flex-col items-start justify-center bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600" variant="outline">
                 <CurrencyDollar size={24} className="mb-2" />
                 <div className="text-sm font-medium">Definir Renda</div>
-                <div className="text-xs text-muted-foreground">Salário e renda extra</div>
+                <div className="text-xs text-emerald-100">Salário e renda extra</div>
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -672,22 +731,32 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="salary">Salário</Label>
-                  <CurrencyInput
+                  <Input
                     id="salary"
+                    type="text"
                     placeholder="0,00"
-                    value={newIncome.salary}
-                    onValueChange={(value) => setNewIncome({ ...newIncome, salary: value })}
-                    showCurrencySymbol
+                    value={newIncome.salary || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0
+                      setNewIncome({ ...newIncome, salary: value })
+                    }}
+                    className="currency-input"
+                    autoComplete="off"
                   />
                 </div>
                 <div>
                   <Label htmlFor="extra">Renda Extra</Label>
-                  <CurrencyInput
+                  <Input
                     id="extra"
+                    type="text"
                     placeholder="0,00"
-                    value={newIncome.extraIncome}
-                    onValueChange={(value) => setNewIncome({ ...newIncome, extraIncome: value })}
-                    showCurrencySymbol
+                    value={newIncome.extraIncome || ''}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0
+                      setNewIncome({ ...newIncome, extraIncome: value })
+                    }}
+                    className="currency-input"
+                    autoComplete="off"
                   />
                 </div>
                 <Button onClick={handleSaveIncome} className="w-full">
@@ -721,12 +790,14 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                 </div>
                 <div>
                   <Label htmlFor="expense-amount">Valor</Label>
-                  <CurrencyInput
+                  <Input
                     id="expense-amount"
+                    type="text"
                     placeholder="0,00"
-                    value={parseFloat(newExpense.amount) || 0}
-                    onValueChange={(value) => setNewExpense({ ...newExpense, amount: value.toString() })}
-                    showCurrencySymbol
+                    value={newExpense.amount}
+                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    className="currency-input"
+                    autoComplete="off"
                   />
                 </div>
                 <div>
@@ -766,12 +837,14 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                   return !existingInvestment ? (
                     <div>
                       <Label htmlFor="investment-balance">Saldo Inicial do Investimento</Label>
-                      <CurrencyInput
+                      <Input
                         id="investment-balance"
+                        type="text"
                         placeholder="0,00 (opcional)"
-                        value={parseFloat(newExpense.investmentBalance) || 0}
-                        onValueChange={(value) => setNewExpense({ ...newExpense, investmentBalance: value.toString() })}
-                        showCurrencySymbol
+                        value={newExpense.investmentBalance}
+                        onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
+                        className="currency-input"
+                        autoComplete="off"
                       />
                       <div className="text-xs text-muted-foreground mt-1">
                         Deixe vazio para usar o valor do investimento como saldo inicial
@@ -800,7 +873,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={handleAddExpense} className="w-full">
+                <Button onClick={handleAddExpense} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                   Adicionar Despesa
                 </Button>
               </div>
@@ -809,10 +882,10 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
           <Dialog open={whatsappDialogOpen} onOpenChange={setWhatsappDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
+              <Button className="h-20 text-left flex-col items-start justify-center bg-green-600 hover:bg-green-700 text-white border-green-600" variant="outline">
                 <ChatCircle size={24} className="mb-2" />
                 <div className="text-sm font-medium">WhatsApp</div>
-                <div className="text-xs text-muted-foreground">Adicionar por mensagem</div>
+                <div className="text-xs text-green-100">Adicionar por mensagem</div>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
