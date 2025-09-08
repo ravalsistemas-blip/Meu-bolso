@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
@@ -28,8 +29,9 @@ import {
   ChartLine
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
-import { ConsolidatedSpreadsheet } from './components/ConsolidatedSpreadsheet'
-import { spreadsheetSync } from './lib/spreadsheet-sync'
+import { formatCurrency, formatDate, formatPercentage } from '@/lib/formatters'
+import { ConsolidatedSpreadsheet } from '@/components/ConsolidatedSpreadsheet'
+import { spreadsheetSync } from '@/lib/spreadsheet-sync'
 import { useAuth } from '@/hooks/useAuth'
 import { AuthPage } from '@/components/AuthPage'
 import { AuthCallback } from '@/components/AuthCallback'
@@ -207,13 +209,6 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   useEffect(() => {
     spreadsheetSync.initializeWithData(safeIncome, safeExpenses, safeMonthlyHistory)
   }, [safeIncome, safeExpenses, safeMonthlyHistory])
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
 
   const parseCurrency = (value: string) => {
     return parseFloat(value.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
@@ -677,22 +672,22 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="salary">Salário</Label>
-                  <Input
+                  <CurrencyInput
                     id="salary"
-                    type="number"
                     placeholder="0,00"
                     value={newIncome.salary}
-                    onChange={(e) => setNewIncome({ ...newIncome, salary: parseFloat(e.target.value) || 0 })}
+                    onValueChange={(value) => setNewIncome({ ...newIncome, salary: value })}
+                    showCurrencySymbol
                   />
                 </div>
                 <div>
                   <Label htmlFor="extra">Renda Extra</Label>
-                  <Input
+                  <CurrencyInput
                     id="extra"
-                    type="number"
                     placeholder="0,00"
                     value={newIncome.extraIncome}
-                    onChange={(e) => setNewIncome({ ...newIncome, extraIncome: parseFloat(e.target.value) || 0 })}
+                    onValueChange={(value) => setNewIncome({ ...newIncome, extraIncome: value })}
+                    showCurrencySymbol
                   />
                 </div>
                 <Button onClick={handleSaveIncome} className="w-full">
@@ -726,12 +721,12 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                 </div>
                 <div>
                   <Label htmlFor="expense-amount">Valor</Label>
-                  <Input
+                  <CurrencyInput
                     id="expense-amount"
-                    type="number"
                     placeholder="0,00"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    value={parseFloat(newExpense.amount) || 0}
+                    onValueChange={(value) => setNewExpense({ ...newExpense, amount: value.toString() })}
+                    showCurrencySymbol
                   />
                 </div>
                 <div>
@@ -771,12 +766,12 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                   return !existingInvestment ? (
                     <div>
                       <Label htmlFor="investment-balance">Saldo Inicial do Investimento</Label>
-                      <Input
+                      <CurrencyInput
                         id="investment-balance"
-                        type="number"
-                        placeholder="0,00 (opcional - se vazio, usará o valor investido)"
-                        value={newExpense.investmentBalance}
-                        onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
+                        placeholder="0,00 (opcional)"
+                        value={parseFloat(newExpense.investmentBalance) || 0}
+                        onValueChange={(value) => setNewExpense({ ...newExpense, investmentBalance: value.toString() })}
+                        showCurrencySymbol
                       />
                       <div className="text-xs text-muted-foreground mt-1">
                         Deixe vazio para usar o valor do investimento como saldo inicial

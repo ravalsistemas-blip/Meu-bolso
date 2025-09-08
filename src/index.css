@@ -72,3 +72,34 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* Remove setas dos inputs number globalmente */
+@layer utilities {
+  .no-spinners {
+    -moz-appearance: textfield;
+  }
+  
+  .no-spinners::-webkit-outer-spin-button,
+  .no-spinners::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  /* Aplica automaticamente a todos os inputs do tipo number */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  /* Classe para inputs monetários */
+  .currency-input {
+    @apply no-spinners;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
