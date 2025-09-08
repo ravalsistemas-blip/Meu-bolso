@@ -13,7 +13,10 @@ import { useAdmin } from '@/hooks/useAdmin'
 
 export function AppHeader({ onAdminClick }: { onAdminClick?: () => void }) {
   const { user, signOut } = useAuth()
-  const { isAdmin } = useAdmin()
+  const { isAdmin, loading } = useAdmin()
+
+  // Debug - remover depois
+  console.log('AppHeader - isAdmin:', isAdmin, 'loading:', loading, 'user:', user?.email)
 
   const getInitials = (name: string) => {
     return name
