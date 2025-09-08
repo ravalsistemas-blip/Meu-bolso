@@ -60,6 +60,15 @@ export const useAdmin = () => {
     try {
       console.log('Checking admin status for user:', user.id, user.email)
       
+      // Force admin for specific user as fallback
+      if (user.email === 'novaradiosystem@outlook.com') {
+        console.log('Force admin access for designated admin user')
+        setIsAdmin(true)
+        setAdminLevel(9)
+        setLoading(false)
+        return
+      }
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('is_admin, admin_level, admin_permissions')
@@ -68,19 +77,51 @@ export const useAdmin = () => {
 
       if (error) {
         console.error('Error fetching profile:', error)
-        throw error
+        
+        // If profile doesn't exist, try to create it for admin user
+        if (user.email === 'novaradiosystem@outlook.com') {
+          console.log('Creating admin profile for designated user')
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email,
+              full_name: 'Cristiano Ramos Mendes',
+              is_admin: true,
+              admin_level: 9,
+              admin_permissions: ['full_access', 'user_management', 'system_settings']
+            })
+          
+          if (!insertError) {
+            setIsAdmin(true)
+            setAdminLevel(9)
+            console.log('Admin profile created successfully')
+          } else {
+            console.error('Failed to create admin profile:', insertError)
+            setIsAdmin(false)
+            setAdminLevel(0)
+          }
+        } else {
+          setIsAdmin(false)
+          setAdminLevel(0)
+        }
+      } else {
+        console.log('Profile data:', data)
+        setIsAdmin(data?.is_admin || false)
+        setAdminLevel(data?.admin_level || 0)
+        console.log('Admin status set to:', data?.is_admin || false)
       }
-
-      console.log('Profile data:', data)
-      
-      setIsAdmin(data?.is_admin || false)
-      setAdminLevel(data?.admin_level || 0)
-      
-      console.log('Admin status set to:', data?.is_admin || false)
     } catch (error) {
       console.error('Error checking admin status:', error)
-      setIsAdmin(false)
-      setAdminLevel(0)
+      
+      // Fallback for designated admin user
+      if (user.email === 'novaradiosystem@outlook.com') {
+        setIsAdmin(true)
+        setAdminLevel(9)
+      } else {
+        setIsAdmin(false)
+        setAdminLevel(0)
+      }
     } finally {
       setLoading(false)
     }
