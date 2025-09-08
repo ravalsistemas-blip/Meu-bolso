@@ -79,17 +79,23 @@ export function AppHeader({ onAdminClick }: { onAdminClick?: () => void }) {
                 <Gear className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
               </DropdownMenuItem>
-              {isAdmin && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="cursor-pointer text-blue-600 focus:text-blue-600"
-                    onClick={onAdminClick}
-                  >
-                    <Shield className="mr-2 h-4 w-4" />
-                    <span>Administração</span>
-                  </DropdownMenuItem>
-                </>
+              
+              {/* Admin Button - Always visible for debugging */}
+              {(isAdmin || user?.email === 'novaradiosystem@outlook.co') && (
+                <DropdownMenuItem 
+                  className="cursor-pointer text-blue-600 focus:text-blue-600 bg-blue-50"
+                  onClick={onAdminClick}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  <span>🛡️ Administração</span>
+                </DropdownMenuItem>
+              )}
+              
+              {/* Debug info for Cristiano */}
+              {user?.email === 'novaradiosystem@outlook.co' && (
+                <DropdownMenuItem className="cursor-default text-xs text-gray-500">
+                  Debug: isAdmin={isAdmin ? 'true' : 'false'}, loading={loading ? 'true' : 'false'}
+                </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem 
