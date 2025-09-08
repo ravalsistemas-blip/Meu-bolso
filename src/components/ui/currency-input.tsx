@@ -57,7 +57,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
           placeholder={placeholder}
           className={cn(
             // Remove setas do input number
-            '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
+            'currency-input',
             showCurrencySymbol && 'pl-10',
             className
           )}
