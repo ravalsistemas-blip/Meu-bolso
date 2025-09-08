@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CurrencyInput } from '@/components/ui/currency-input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
@@ -14,19 +15,28 @@ import { Textarea } from '@/components/ui/textarea'
 import { 
   Plus, 
   Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  AlertTriangle,
-  Trash2,
-  DollarSign,
+  TrendUp, 
+  TrendDown, 
+  Warning,
+  Trash,
+  CurrencyDollar,
   Download,
-  History,
-  RotateCcw,
+  ClockCounterClockwise,
+  ArrowCounterClockwise,
   ChatCircle,
   Robot,
-  Copy
+  Copy,
+  ChartLine
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { formatCurrency, formatDate, formatPercentage } from '@/lib/formatters'
+import { ConsolidatedSpreadsheet } from '@/components/ConsolidatedSpreadsheet'
+import { spreadsheetSync } from '@/lib/spreadsheet-sync'
+import { useAuth } from '@/hooks/useAuth'
+import { AuthPage } from '@/components/AuthPage'
+import { AuthCallback } from '@/components/AuthCallback'
+import { AppHeader } from '@/components/AppHeader'
+import { AdminPage } from '@/components/AdminPage'
 
 type Expense = {
   id: string
@@ -72,6 +82,53 @@ const EXPENSE_CATEGORIES = [
 ]
 
 function App() {
+  const { user, loading } = useAuth()
+  const [currentView, setCurrentView] = useState<'app' | 'admin'>('app')
+  
+  // Check if this is an auth callback
+  const isAuthCallback = window.location.hash.includes('access_token') && 
+                        (window.location.hash.includes('type=signup') || 
+                         window.location.hash.includes('type=email_change'))
+  
+  // Show auth callback page if this is a callback
+  if (isAuthCallback) {
+    return <AuthCallback />
+  }
+  
+  // Show loading spinner while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-3 rounded-lg inline-block mb-4">
+            <Wallet className="h-8 w-8 text-white animate-pulse" />
+          </div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show auth page if user is not logged in
+  if (!user) {
+    return <AuthPage />
+  }
+
+  // Show admin page if requested
+  if (currentView === 'admin') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AppHeader onAdminClick={() => setCurrentView('app')} />
+        <AdminPage />
+      </div>
+    )
+  }
+
+  // Main app content for authenticated users
+  return <ExpenseTrackerApp onAdminClick={() => setCurrentView('admin')} />
+}
+
+function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   const [income, setIncome] = useKV<Income>('income', { salary: 0, extraIncome: 0 })
   const [expenses, setExpenses] = useKV<Expense[]>('expenses', [])
   const [currentMonth, setCurrentMonth] = useKV<CurrentMonth>('current-month', { 
@@ -84,14 +141,31 @@ function App() {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false)
+  const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false)
   
-  const [newIncome, setNewIncome] = useState<Income>(income)
-  const [newExpense, setNewExpense] = useState({
+  // Safe defaults for KV values
+  const safeIncome = income || { salary: 0, extraIncome: 0 }
+  const safeExpenses = expenses || []
+  const safeCurrentMonth = currentMonth || { 
+    month: new Date().toLocaleDateString('pt-BR', { month: 'long' }), 
+    year: new Date().getFullYear() 
+  }
+  const safeMonthlyHistory = monthlyHistory || []
+  
+  const [newIncome, setNewIncome] = useState<Income>(safeIncome)
+  const [newExpense, setNewExpense] = useState<{
+    name: string
+    amount: string
+    category: string
+    paymentMethod: 'salary' | 'extra'
+    type: 'fixed' | 'variable' | 'investment'
+    investmentBalance: string
+  }>({
     name: '',
     amount: '',
     category: '',
-    paymentMethod: 'salary' as const,
-    type: 'variable' as const,
+    paymentMethod: 'salary',
+    type: 'variable',
     investmentBalance: ''
   })
   const [whatsappMessage, setWhatsappMessage] = useState('')
@@ -103,23 +177,23 @@ function App() {
     const currentMonthName = now.toLocaleDateString('pt-BR', { month: 'long' })
     const currentYear = now.getFullYear()
 
-    if (currentMonth.month !== currentMonthName || currentMonth.year !== currentYear) {
+    if (safeCurrentMonth.month !== currentMonthName || safeCurrentMonth.year !== currentYear) {
       // Save current month data to history before resetting
-      if (expenses.length > 0 || income.salary > 0 || income.extraIncome > 0) {
-        const totalIncome = income.salary + income.extraIncome
-        const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+      if (safeExpenses.length > 0 || safeIncome.salary > 0 || safeIncome.extraIncome > 0) {
+        const totalIncome = safeIncome.salary + safeIncome.extraIncome
+        const totalExpenses = safeExpenses.reduce((sum, e) => sum + e.amount, 0)
         
         const monthData: MonthlyData = {
-          month: currentMonth.month,
-          year: currentMonth.year,
-          income,
-          expenses,
+          month: safeCurrentMonth.month,
+          year: safeCurrentMonth.year,
+          income: safeIncome,
+          expenses: safeExpenses,
           totalIncome,
           totalExpenses,
           remainingIncome: totalIncome - totalExpenses
         }
 
-        setMonthlyHistory((current) => [...current, monthData])
+        setMonthlyHistory((current) => [...(current || []), monthData])
       }
 
       // Reset current month data
@@ -131,20 +205,18 @@ function App() {
     }
   }, [currentMonth, expenses, income, setExpenses, setIncome, setCurrentMonth, setMonthlyHistory])
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value)
-  }
+  // Initialize spreadsheet sync with current data
+  useEffect(() => {
+    spreadsheetSync.initializeWithData(safeIncome, safeExpenses, safeMonthlyHistory)
+  }, [safeIncome, safeExpenses, safeMonthlyHistory])
 
   const parseCurrency = (value: string) => {
     return parseFloat(value.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
   }
 
-  const fixedExpenses = expenses.filter(e => e.type === 'fixed')
-  const variableExpenses = expenses.filter(e => e.type === 'variable')
-  const investmentExpenses = expenses.filter(e => e.type === 'investment')
+  const fixedExpenses = safeExpenses.filter(e => e.type === 'fixed')
+  const variableExpenses = safeExpenses.filter(e => e.type === 'variable')
+  const investmentExpenses = safeExpenses.filter(e => e.type === 'investment')
   
   // Calculate consolidated investment balances
   const getConsolidatedInvestments = () => {
@@ -182,19 +254,33 @@ function App() {
   const totalInvestmentExpenses = investmentExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalExpenses = totalFixedExpenses + totalVariableExpenses + totalInvestmentExpenses
   
-  const salaryExpenses = expenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
-  const extraExpenses = expenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
+  const salaryExpenses = safeExpenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
+  const extraExpenses = safeExpenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
   
-  const totalIncome = income.salary + income.extraIncome
+  const totalIncome = safeIncome.salary + safeIncome.extraIncome
   const remainingIncome = totalIncome - totalExpenses
-  const remainingSalary = income.salary - salaryExpenses
-  const remainingExtra = income.extraIncome - extraExpenses
+  const remainingSalary = safeIncome.salary - salaryExpenses
+  const remainingExtra = safeIncome.extraIncome - extraExpenses
 
-  const salaryUsagePercent = income.salary > 0 ? (salaryExpenses / income.salary) * 100 : 0
+  const salaryUsagePercent = safeIncome.salary > 0 ? (salaryExpenses / safeIncome.salary) * 100 : 0
 
   const handleSaveIncome = () => {
     setIncome(newIncome)
     setIncomeDialogOpen(false)
+    
+    // Sync with spreadsheet system
+    spreadsheetSync.syncChange({
+      section: 'income',
+      action: 'update',
+      data: newIncome,
+      relatedSections: ['monthly', 'summary'],
+      metadata: {
+        monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+        description: `Renda atualizada: Salário ${formatCurrency(newIncome.salary)}, Extra ${formatCurrency(newIncome.extraIncome)}`,
+        amount: newIncome.salary + newIncome.extraIncome
+      }
+    })
+    
     toast.success('Renda atualizada com sucesso!')
   }
 
@@ -214,7 +300,7 @@ function App() {
 
     if (newExpense.type === 'investment') {
       // Check if this investment already exists
-      const existingInvestment = expenses.find(e => 
+      const existingInvestment = safeExpenses.find(e => 
         e.type === 'investment' && 
         e.name.toLowerCase() === newExpense.name.toLowerCase()
       )
@@ -240,7 +326,7 @@ function App() {
       investmentBalance
     }
 
-    setExpenses((current) => [...current, expense])
+    setExpenses((current) => [...(current || []), expense])
     setNewExpense({
       name: '',
       amount: '',
@@ -250,46 +336,53 @@ function App() {
       investmentBalance: ''
     })
     setExpenseDialogOpen(false)
+    
+    // Sync with spreadsheet system
+    const updatedExpenses = [...safeExpenses, expense]
+    spreadsheetSync.syncChange({
+      section: expense.type === 'investment' ? 'investment' : 'expense',
+      action: 'create',
+      data: updatedExpenses,
+      relatedSections: ['monthly', 'summary'],
+      metadata: {
+        monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+        description: `${expense.type === 'investment' ? 'Investimento' : 'Despesa'} adicionada: ${expense.name}`,
+        amount: expense.amount,
+        category: expense.category
+      }
+    })
+    
     toast.success(newExpense.type === 'investment' ? 'Investimento adicionado com sucesso!' : 'Despesa adicionada com sucesso!')
   }
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses((current) => current.filter(e => e.id !== id))
+    const expenseToDelete = safeExpenses.find(e => e.id === id)
+    const updatedExpenses = safeExpenses.filter(e => e.id !== id)
+    
+    setExpenses((current) => ((current || []).filter(e => e.id !== id)))
+    
+    // Sync with spreadsheet system
+    if (expenseToDelete) {
+      spreadsheetSync.syncChange({
+        section: expenseToDelete.type === 'investment' ? 'investment' : 'expense',
+        action: 'delete',
+        data: updatedExpenses,
+        relatedSections: ['monthly', 'summary'],
+        metadata: {
+          monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+          description: `${expenseToDelete.type === 'investment' ? 'Investimento' : 'Despesa'} removida: ${expenseToDelete.name}`,
+          amount: -expenseToDelete.amount,
+          category: expenseToDelete.category
+        }
+      })
+    }
+    
     toast.success('Despesa removida com sucesso!')
-  }
-
-  const handleResetMonth = () => {
-    if (expenses.length === 0 && income.salary === 0 && income.extraIncome === 0) {
-      toast.error('Não há dados para resetar')
-      return
-    }
-
-    // Save current month to history
-    const totalIncome = income.salary + income.extraIncome
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
-    
-    const monthData: MonthlyData = {
-      month: currentMonth.month,
-      year: currentMonth.year,
-      income,
-      expenses,
-      totalIncome,
-      totalExpenses,
-      remainingIncome: totalIncome - totalExpenses
-    }
-
-    setMonthlyHistory((current) => [...current, monthData])
-    
-    // Reset current data
-    setExpenses([])
-    setIncome({ salary: 0, extraIncome: 0 })
-    
-    toast.success('Mês resetado e salvo no histórico!')
   }
 
   const generateCSV = (data: MonthlyData) => {
     const headers = ['Tipo', 'Nome', 'Categoria', 'Valor', 'Forma de Pagamento', 'Saldo Investimento']
-    const rows = []
+    const rows: string[][] = []
     
     // Add income rows
     if (data.income.salary > 0) {
@@ -339,7 +432,7 @@ function App() {
     toast.success('Planilha baixada com sucesso!')
   }
 
-  const processWhatsappMessage = async () => {
+  const processWhatsAppMessage = async () => {
     if (!whatsappMessage.trim()) {
       toast.error('Digite uma mensagem para processar')
       return
@@ -348,82 +441,30 @@ function App() {
     setIsProcessingWhatsapp(true)
 
     try {
-      const prompt = spark.llmPrompt`
-        Analise esta mensagem do WhatsApp e extraia informações financeiras para uma planilha de controle:
-
-        Mensagem: "${whatsappMessage}"
-
-        Extraia e retorne um JSON com as seguintes informações, se disponíveis:
-        - type: "income" ou "expense"
-        - name: nome da receita/despesa
-        - amount: valor numérico (apenas números)
-        - category: categoria (Alimentação, Transporte, Moradia, Saúde, Educação, Lazer, Roupas, Investimentos, Outros)
-        - expenseType: "fixed", "variable" ou "investment" (apenas para despesas)
-        - paymentMethod: "salary" ou "extra" 
-        - investmentBalance: valor do saldo (apenas para investimentos)
-
-        Exemplos de mensagens:
-        - "Gastei 150 no supermercado" → expense, variable, Alimentação
-        - "Recebi 3000 de salário" → income, salary
-        - "Paguei 800 de aluguel" → expense, fixed, Moradia  
-        - "Investi 500 na poupança, saldo 2000" → expense, investment, Investimentos
-
-        Retorne apenas o JSON válido, sem explicações.
-      `
-
-      const result = await spark.llm(prompt, 'gpt-4o-mini', true)
-      const parsedData = JSON.parse(result)
-
-      if (parsedData.type === 'income') {
-        // Processar receita
-        if (parsedData.paymentMethod === 'salary') {
-          setIncome(current => ({ ...current, salary: current.salary + parsedData.amount }))
-        } else {
-          setIncome(current => ({ ...current, extraIncome: current.extraIncome + parsedData.amount }))
-        }
-        toast.success(`Receita de ${formatCurrency(parsedData.amount)} adicionada!`)
-      } else if (parsedData.type === 'expense') {
-        // Processar despesa
-        const expense: Expense = {
-          id: Date.now().toString(),
-          name: parsedData.name || 'Despesa via WhatsApp',
-          amount: parsedData.amount,
-          category: parsedData.category || 'Outros',
-          paymentMethod: parsedData.paymentMethod || 'salary',
-          type: parsedData.expenseType || 'variable',
-          date: new Date().toISOString(),
-          investmentBalance: parsedData.expenseType === 'investment' ? (() => {
-            // For investments via WhatsApp, handle automatic balance calculation
-            const existingInvestment = expenses.find(e => 
-              e.type === 'investment' && 
-              e.name.toLowerCase() === (parsedData.name || 'Despesa via WhatsApp').toLowerCase()
-            )
-            
-            if (existingInvestment && existingInvestment.investmentBalance !== undefined) {
-              return existingInvestment.investmentBalance + parsedData.amount
-            } else {
-              return parsedData.investmentBalance || parsedData.amount
-            }
-          })() : undefined
-        }
-
-        setExpenses(current => [...current, expense])
-        toast.success(`Despesa "${expense.name}" de ${formatCurrency(expense.amount)} adicionada!`)
+      // Para agora, vamos apenas extrair informações básicas
+      // TODO: Implementar processamento com IA quando disponível
+      
+      const hasIncome = whatsappMessage.toLowerCase().includes('recebi') || 
+                       whatsappMessage.toLowerCase().includes('salário') ||
+                       whatsappMessage.toLowerCase().includes('renda')
+      
+      if (hasIncome) {
+        toast.info('Funcionalidade de processamento automático em desenvolvimento')
       } else {
-        toast.error('Não foi possível identificar informações financeiras na mensagem')
+        toast.info('Funcionalidade de processamento automático em desenvolvimento')
       }
-
-      setWhatsappMessage('')
+      
       setWhatsappDialogOpen(false)
-
+      setWhatsappMessage('')
+      
     } catch (error) {
       console.error('Erro ao processar mensagem:', error)
-      toast.error('Erro ao processar a mensagem. Tente ser mais específico.')
+      toast.error('Erro ao processar mensagem do WhatsApp')
     } finally {
       setIsProcessingWhatsapp(false)
     }
   }
-
+  
   const getWhatsappExamples = () => {
     return [
       "Gastei R$ 45 no Uber hoje",
@@ -441,21 +482,32 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">Controle Financeiro</h1>
-              <p className="text-muted-foreground">
-                {currentMonth.month} {currentMonth.year} - Gerencie suas despesas fixas e variáveis
-              </p>
+    <div className="min-h-screen bg-background">
+      <AppHeader onAdminClick={onAdminClick} />
+      <div className="p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          <header className="mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-2">Controle Financeiro</h1>
+                <p className="text-muted-foreground">
+                  {safeCurrentMonth.month} {safeCurrentMonth.year} - Gerencie suas despesas fixas e variáveis
+                </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={() => setSpreadsheetDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
+              >
+                <ChartLine size={16} className="mr-2" />
+                Planilha Consolidada
+              </Button>
               <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <History size={16} className="mr-2" />
+                    <ClockCounterClockwise size={16} className="mr-2" />
                     Histórico
                   </Button>
                 </DialogTrigger>
@@ -464,13 +516,13 @@ function App() {
                     <DialogTitle>Histórico Anual</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    {monthlyHistory.length === 0 ? (
+                    {safeMonthlyHistory.length === 0 ? (
                       <p className="text-muted-foreground text-center py-8">
                         Nenhum histórico disponível ainda.
                       </p>
                     ) : (
                       <div className="grid gap-4">
-                        {monthlyHistory
+                        {safeMonthlyHistory
                           .sort((a, b) => b.year - a.year || new Date(`${b.month} 1, 2000`).getMonth() - new Date(`${a.month} 1, 2000`).getMonth())
                           .map((data, index) => (
                           <Card key={index} className="p-4">
@@ -517,15 +569,6 @@ function App() {
                   </div>
                 </DialogContent>
               </Dialog>
-              <Button
-                onClick={handleResetMonth}
-                variant="outline"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-              >
-                <RotateCcw size={16} className="mr-2" />
-                Resetar Mês
-              </Button>
             </div>
           </div>
         </header>
@@ -539,7 +582,7 @@ function App() {
             <CardContent>
               <div className="text-2xl font-bold text-primary font-numbers">{formatCurrency(totalIncome)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendingUp size={16} className="text-primary" />
+                <TrendUp size={16} className="text-primary" />
                 <span className="text-sm text-muted-foreground">Mensal</span>
               </div>
             </CardContent>
@@ -552,7 +595,7 @@ function App() {
             <CardContent>
               <div className="text-2xl font-bold text-destructive font-numbers">{formatCurrency(totalExpenses)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendingDown size={16} className="text-destructive" />
+                <TrendDown size={16} className="text-destructive" />
                 <span className="text-sm text-muted-foreground">Este mês</span>
               </div>
             </CardContent>
@@ -580,7 +623,7 @@ function App() {
             <CardContent>
               <div className="text-2xl font-bold text-accent font-numbers">{formatCurrency(remainingExtra)}</div>
               <div className="flex items-center gap-1 mt-1">
-                <TrendingUp size={16} className="text-accent" />
+                <TrendUp size={16} className="text-accent" />
                 <span className="text-sm text-muted-foreground">Disponível</span>
               </div>
             </CardContent>
@@ -594,7 +637,7 @@ function App() {
               <CardContent>
                 <div className="text-2xl font-bold text-secondary font-numbers">{formatCurrency(totalInvestmentExpenses)}</div>
                 <div className="flex items-center gap-1 mt-1">
-                  <TrendingUp size={16} className="text-secondary" />
+                  <TrendUp size={16} className="text-secondary" />
                   <span className="text-sm text-muted-foreground">Aplicado</span>
                 </div>
               </CardContent>
@@ -605,7 +648,7 @@ function App() {
         {/* Alertas */}
         {salaryUsagePercent > 90 && (
           <Alert className="mb-6 border-destructive">
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <Warning className="h-4 w-4 text-destructive" />
             <AlertDescription className="text-destructive">
               Cuidado! Você já usou {salaryUsagePercent.toFixed(1)}% do seu salário.
             </AlertDescription>
@@ -617,7 +660,7 @@ function App() {
           <Dialog open={incomeDialogOpen} onOpenChange={setIncomeDialogOpen}>
             <DialogTrigger asChild>
               <Button className="h-20 text-left flex-col items-start justify-center" variant="outline">
-                <DollarSign size={24} className="mb-2" />
+                <CurrencyDollar size={24} className="mb-2" />
                 <div className="text-sm font-medium">Definir Renda</div>
                 <div className="text-xs text-muted-foreground">Salário e renda extra</div>
               </Button>
@@ -629,22 +672,22 @@ function App() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="salary">Salário</Label>
-                  <Input
+                  <CurrencyInput
                     id="salary"
-                    type="number"
                     placeholder="0,00"
                     value={newIncome.salary}
-                    onChange={(e) => setNewIncome({ ...newIncome, salary: parseFloat(e.target.value) || 0 })}
+                    onValueChange={(value) => setNewIncome({ ...newIncome, salary: value })}
+                    showCurrencySymbol
                   />
                 </div>
                 <div>
                   <Label htmlFor="extra">Renda Extra</Label>
-                  <Input
+                  <CurrencyInput
                     id="extra"
-                    type="number"
                     placeholder="0,00"
                     value={newIncome.extraIncome}
-                    onChange={(e) => setNewIncome({ ...newIncome, extraIncome: parseFloat(e.target.value) || 0 })}
+                    onValueChange={(value) => setNewIncome({ ...newIncome, extraIncome: value })}
+                    showCurrencySymbol
                   />
                 </div>
                 <Button onClick={handleSaveIncome} className="w-full">
@@ -678,12 +721,12 @@ function App() {
                 </div>
                 <div>
                   <Label htmlFor="expense-amount">Valor</Label>
-                  <Input
+                  <CurrencyInput
                     id="expense-amount"
-                    type="number"
                     placeholder="0,00"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                    value={parseFloat(newExpense.amount) || 0}
+                    onValueChange={(value) => setNewExpense({ ...newExpense, amount: value.toString() })}
+                    showCurrencySymbol
                   />
                 </div>
                 <div>
@@ -714,7 +757,7 @@ function App() {
                 </div>
                 {newExpense.type === 'investment' && (() => {
                   // Check if this investment already exists
-                  const existingInvestment = expenses.find(e => 
+                  const existingInvestment = safeExpenses.find(e => 
                     e.type === 'investment' && 
                     e.name.toLowerCase() === newExpense.name.toLowerCase()
                   )
@@ -723,12 +766,12 @@ function App() {
                   return !existingInvestment ? (
                     <div>
                       <Label htmlFor="investment-balance">Saldo Inicial do Investimento</Label>
-                      <Input
+                      <CurrencyInput
                         id="investment-balance"
-                        type="number"
-                        placeholder="0,00 (opcional - se vazio, usará o valor investido)"
-                        value={newExpense.investmentBalance}
-                        onChange={(e) => setNewExpense({ ...newExpense, investmentBalance: e.target.value })}
+                        placeholder="0,00 (opcional)"
+                        value={parseFloat(newExpense.investmentBalance) || 0}
+                        onValueChange={(value) => setNewExpense({ ...newExpense, investmentBalance: value.toString() })}
+                        showCurrencySymbol
                       />
                       <div className="text-xs text-muted-foreground mt-1">
                         Deixe vazio para usar o valor do investimento como saldo inicial
@@ -822,7 +865,7 @@ function App() {
                 </Alert>
 
                 <Button 
-                  onClick={processWhatsappMessage} 
+                  onClick={processWhatsAppMessage} 
                   className="w-full"
                   disabled={isProcessingWhatsapp || !whatsappMessage.trim()}
                 >
@@ -869,7 +912,7 @@ function App() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp size={20} />
+                <TrendUp size={20} />
                 Uso da Renda Extra
               </CardTitle>
             </CardHeader>
@@ -880,11 +923,11 @@ function App() {
                   <span>Disponível: {formatCurrency(remainingExtra)}</span>
                 </div>
                 <Progress 
-                  value={income.extraIncome > 0 ? Math.min((extraExpenses / income.extraIncome) * 100, 100) : 0} 
+                  value={safeIncome.extraIncome > 0 ? Math.min((extraExpenses / safeIncome.extraIncome) * 100, 100) : 0} 
                   className="h-2" 
                 />
                 <div className="text-xs text-muted-foreground text-center">
-                  {income.extraIncome > 0 ? ((extraExpenses / income.extraIncome) * 100).toFixed(1) : 0}% utilizado
+                  {safeIncome.extraIncome > 0 ? ((extraExpenses / safeIncome.extraIncome) * 100).toFixed(1) : 0}% utilizado
                 </div>
               </div>
             </CardContent>
@@ -906,13 +949,13 @@ function App() {
                 <CardTitle>Todas as Despesas</CardTitle>
               </CardHeader>
               <CardContent>
-                {expenses.length === 0 ? (
+                {safeExpenses.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
                     Nenhuma despesa cadastrada. Clique em "Nova Despesa" para começar.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {expenses.map((expense) => (
+                    {safeExpenses.map((expense) => (
                       <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
@@ -933,7 +976,7 @@ function App() {
                               </span>
                             )}
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendUp size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
@@ -944,7 +987,7 @@ function App() {
                           onClick={() => handleDeleteExpense(expense.id)}
                           className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 size={16} />
+                          <Trash size={16} />
                         </Button>
                       </div>
                     ))}
@@ -976,7 +1019,7 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendUp size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
@@ -987,7 +1030,7 @@ function App() {
                           onClick={() => handleDeleteExpense(expense.id)}
                           className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 size={16} />
+                          <Trash size={16} />
                         </Button>
                       </div>
                     ))}
@@ -1019,7 +1062,7 @@ function App() {
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-numbers font-medium">{formatCurrency(expense.amount)}</span>
                             <span className="flex items-center gap-1">
-                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                              {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendUp size={14} />}
                               {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
@@ -1030,7 +1073,7 @@ function App() {
                           onClick={() => handleDeleteExpense(expense.id)}
                           className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 size={16} />
+                          <Trash size={16} />
                         </Button>
                       </div>
                     ))}
@@ -1076,7 +1119,7 @@ function App() {
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              {investment.paymentMethod === 'salary' ? <Wallet size={12} /> : <TrendingUp size={12} />}
+                              {investment.paymentMethod === 'salary' ? <Wallet size={12} /> : <TrendUp size={12} />}
                               {investment.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                             </span>
                           </div>
@@ -1103,7 +1146,7 @@ function App() {
                                 </span>
                               )}
                               <span className="flex items-center gap-1">
-                                {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendingUp size={14} />}
+                                {expense.paymentMethod === 'salary' ? <Wallet size={14} /> : <TrendUp size={14} />}
                                 {expense.paymentMethod === 'salary' ? 'Salário' : 'Renda Extra'}
                               </span>
                             </div>
@@ -1114,7 +1157,7 @@ function App() {
                             onClick={() => handleDeleteExpense(expense.id)}
                             className="text-destructive hover:text-destructive"
                           >
-                            <Trash2 size={16} />
+                            <Trash size={16} />
                           </Button>
                         </div>
                       ))}
@@ -1125,6 +1168,13 @@ function App() {
             </Card>
           </TabsContent>
         </Tabs>
+      </div>
+      
+      {/* Planilha Consolidada */}
+      <ConsolidatedSpreadsheet 
+        isOpen={spreadsheetDialogOpen} 
+        onClose={() => setSpreadsheetDialogOpen(false)}
+      />
       </div>
     </div>
   )
