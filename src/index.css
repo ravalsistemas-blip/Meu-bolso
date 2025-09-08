@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
 
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.02 230);
@@ -24,15 +30,23 @@
   --radius: 0.625rem;
 }
 
-body {
-  font-family: 'Inter', sans-serif;
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', sans-serif;
+  }
+  
+  .font-numbers {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-.font-numbers {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Remove setas dos inputs number globalmente */
+/* Remove setas dos inputs number globalmente - FORMATAÇÃO AUTOMÁTICA */
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -45,7 +59,7 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
-/* Classe para inputs monetários */
+/* Classe para inputs monetários - FORMATAÇÃO AUTOMÁTICA */
 .currency-input {
   text-align: right;
   font-variant-numeric: tabular-nums;
