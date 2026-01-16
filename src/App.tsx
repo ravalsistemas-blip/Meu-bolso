@@ -1,4 +1,3 @@
-import { useKV } from '@github/spark/hooks'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -160,28 +159,19 @@ function App() {
 }
 
 function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
-  const [income, setIncome] = useKV<Income>('income', { salary: 0, extraIncome: 0 })
-  const [expenses, setExpenses] = useKV<Expense[]>('expenses', [])
-  const [currentMonth, setCurrentMonth] = useKV<CurrentMonth>('current-month', { 
+  const [income, setIncome] = useState<Income>({ salary: 0, extraIncome: 0 })
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [currentMonth, setCurrentMonth] = useState<CurrentMonth>({ 
     month: new Date().toLocaleDateString('pt-BR', { month: 'long' }), 
     year: new Date().getFullYear() 
   })
-  const [monthlyHistory, setMonthlyHistory] = useKV<MonthlyData[]>('monthly-history', [])
+  const [monthlyHistory, setMonthlyHistory] = useState<MonthlyData[]>([])
   
   const [incomeDialogOpen, setIncomeDialogOpen] = useState(false)
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [whatsappDialogOpen, setWhatsappDialogOpen] = useState(false)
   const [spreadsheetDialogOpen, setSpreadsheetDialogOpen] = useState(false)
-  
-  // Safe defaults for KV values
-  const safeIncome = income || { salary: 0, extraIncome: 0 }
-  const safeExpenses = expenses || []
-  const safeCurrentMonth = currentMonth || { 
-    month: new Date().toLocaleDateString('pt-BR', { month: 'long' }), 
-    year: new Date().getFullYear() 
-  }
-  const safeMonthlyHistory = monthlyHistory || []
   
   const [newIncome, setNewIncome] = useState<Income>({ salary: 0, extraIncome: 0 })
   const [newExpense, setNewExpense] = useState<{
@@ -205,9 +195,9 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   // Sync newIncome when dialog opens
   useEffect(() => {
     if (incomeDialogOpen) {
-      setNewIncome(safeIncome)
+      setNewIncome(income)
     }
-  }, [incomeDialogOpen, safeIncome])
+  }, [incomeDialogOpen, income])
 
   // Check if month changed and reset if needed
   useEffect(() => {
@@ -215,17 +205,17 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
     const currentMonthName = now.toLocaleDateString('pt-BR', { month: 'long' })
     const currentYear = now.getFullYear()
 
-    if (safeCurrentMonth.month !== currentMonthName || safeCurrentMonth.year !== currentYear) {
+    if (currentMonth.month !== currentMonthName || currentMonth.year !== currentYear) {
       // Save current month data to history before resetting
-      if (safeExpenses.length > 0 || safeIncome.salary > 0 || safeIncome.extraIncome > 0) {
-        const totalIncome = safeIncome.salary + safeIncome.extraIncome
-        const totalExpenses = safeExpenses.reduce((sum, e) => sum + e.amount, 0)
+      if (expenses.length > 0 || income.salary > 0 || income.extraIncome > 0) {
+        const totalIncome = income.salary + income.extraIncome
+        const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
         
         const monthData: MonthlyData = {
-          month: safeCurrentMonth.month,
-          year: safeCurrentMonth.year,
-          income: safeIncome,
-          expenses: safeExpenses,
+          month: currentMonth.month,
+          year: currentMonth.year,
+          income: income,
+          expenses: expenses,
           totalIncome,
           totalExpenses,
           remainingIncome: totalIncome - totalExpenses
@@ -245,8 +235,8 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
   // Initialize spreadsheet sync with current data
   useEffect(() => {
-    spreadsheetSync.initializeWithData(safeIncome, safeExpenses, safeMonthlyHistory)
-  }, [safeIncome, safeExpenses, safeMonthlyHistory])
+    spreadsheetSync.initializeWithData(income, expenses, monthlyHistory)
+  }, [income, expenses, monthlyHistory])
 
   const parseCurrency = (value: string) => {
     if (!value || value === '') return 0
@@ -258,9 +248,9 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
     return parseFloat(cleanValue) || 0
   }
 
-  const fixedExpenses = safeExpenses.filter(e => e.type === 'fixed')
-  const variableExpenses = safeExpenses.filter(e => e.type === 'variable')
-  const investmentExpenses = safeExpenses.filter(e => e.type === 'investment')
+  const fixedExpenses = expenses.filter(e => e.type === 'fixed')
+  const variableExpenses = expenses.filter(e => e.type === 'variable')
+  const investmentExpenses = expenses.filter(e => e.type === 'investment')
   
   // Calculate consolidated investment balances
   const getConsolidatedInvestments = () => {
@@ -298,15 +288,15 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   const totalInvestmentExpenses = investmentExpenses.reduce((sum, e) => sum + e.amount, 0)
   const totalExpenses = totalFixedExpenses + totalVariableExpenses + totalInvestmentExpenses
   
-  const salaryExpenses = safeExpenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
-  const extraExpenses = safeExpenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
+  const salaryExpenses = expenses.filter(e => e.paymentMethod === 'salary').reduce((sum, e) => sum + e.amount, 0)
+  const extraExpenses = expenses.filter(e => e.paymentMethod === 'extra').reduce((sum, e) => sum + e.amount, 0)
   
-  const totalIncome = safeIncome.salary + safeIncome.extraIncome
+  const totalIncome = income.salary + income.extraIncome
   const remainingIncome = totalIncome - totalExpenses
-  const remainingSalary = safeIncome.salary - salaryExpenses
-  const remainingExtra = safeIncome.extraIncome - extraExpenses
+  const remainingSalary = income.salary - salaryExpenses
+  const remainingExtra = income.extraIncome - extraExpenses
 
-  const salaryUsagePercent = safeIncome.salary > 0 ? (salaryExpenses / safeIncome.salary) * 100 : 0
+  const salaryUsagePercent = income.salary > 0 ? (salaryExpenses / income.salary) * 100 : 0
 
   const handleSaveIncome = () => {
     setIncome(newIncome)
@@ -319,7 +309,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
       data: newIncome,
       relatedSections: ['monthly', 'summary'],
       metadata: {
-        monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+        monthYear: `${currentMonth.month} ${currentMonth.year}`,
         description: `Renda atualizada: Salário ${formatCurrency(newIncome.salary)}, Extra ${formatCurrency(newIncome.extraIncome)}`,
         amount: newIncome.salary + newIncome.extraIncome
       }
@@ -344,7 +334,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
 
     if (newExpense.type === 'investment') {
       // Check if this investment already exists
-      const existingInvestment = safeExpenses.find(e => 
+      const existingInvestment = expenses.find(e => 
         e.type === 'investment' && 
         e.name.toLowerCase() === newExpense.name.toLowerCase()
       )
@@ -382,14 +372,14 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
     setExpenseDialogOpen(false)
     
     // Sync with spreadsheet system
-    const updatedExpenses = [...safeExpenses, expense]
+    const updatedExpenses = [...expenses, expense]
     spreadsheetSync.syncChange({
       section: expense.type === 'investment' ? 'investment' : 'expense',
       action: 'create',
       data: updatedExpenses,
       relatedSections: ['monthly', 'summary'],
       metadata: {
-        monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+        monthYear: `${currentMonth.month} ${currentMonth.year}`,
         description: `${expense.type === 'investment' ? 'Investimento' : 'Despesa'} adicionada: ${expense.name}`,
         amount: expense.amount,
         category: expense.category
@@ -400,8 +390,8 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
   }
 
   const handleDeleteExpense = (id: string) => {
-    const expenseToDelete = safeExpenses.find(e => e.id === id)
-    const updatedExpenses = safeExpenses.filter(e => e.id !== id)
+    const expenseToDelete = expenses.find(e => e.id === id)
+    const updatedExpenses = expenses.filter(e => e.id !== id)
     
     setExpenses((current) => (current || []).filter(e => e.id !== id))
     
@@ -413,7 +403,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
         data: updatedExpenses,
         relatedSections: ['monthly', 'summary'],
         metadata: {
-          monthYear: `${safeCurrentMonth.month} ${safeCurrentMonth.year}`,
+          monthYear: `${currentMonth.month} ${currentMonth.year}`,
           description: `${expenseToDelete.type === 'investment' ? 'Investimento' : 'Despesa'} removida: ${expenseToDelete.name}`,
           amount: -expenseToDelete.amount,
           category: expenseToDelete.category
@@ -535,7 +525,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
               <div>
                 <h1 className="text-3xl font-bold text-foreground mb-2">Controle Financeiro</h1>
                 <p className="text-muted-foreground">
-                  {safeCurrentMonth.month} {safeCurrentMonth.year} - Gerencie suas despesas fixas e variáveis
+                  {currentMonth.month} {currentMonth.year} - Gerencie suas despesas fixas e variáveis
                 </p>
             </div>
             <div className="flex gap-2">
@@ -560,13 +550,13 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                     <DialogTitle>Histórico Anual</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4">
-                    {safeMonthlyHistory.length === 0 ? (
+                    {monthlyHistory.length === 0 ? (
                       <p className="text-muted-foreground text-center py-8">
                         Nenhum histórico disponível ainda.
                       </p>
                     ) : (
                       <div className="grid gap-4">
-                        {safeMonthlyHistory
+                        {monthlyHistory
                           .sort((a, b) => b.year - a.year || new Date(`${b.month} 1, 2000`).getMonth() - new Date(`${a.month} 1, 2000`).getMonth())
                           .map((data, index) => (
                           <Card key={index} className="p-4">
@@ -828,7 +818,7 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                 </div>
                 {newExpense.type === 'investment' && (() => {
                   // Check if this investment already exists
-                  const existingInvestment = safeExpenses.find(e => 
+                  const existingInvestment = expenses.find(e => 
                     e.type === 'investment' && 
                     e.name.toLowerCase() === newExpense.name.toLowerCase()
                   )
@@ -996,11 +986,11 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                   <span>Disponível: {formatCurrency(remainingExtra)}</span>
                 </div>
                 <Progress 
-                  value={safeIncome.extraIncome > 0 ? Math.min((extraExpenses / safeIncome.extraIncome) * 100, 100) : 0} 
+                  value={income.extraIncome > 0 ? Math.min((extraExpenses / income.extraIncome) * 100, 100) : 0} 
                   className="h-2" 
                 />
                 <div className="text-xs text-muted-foreground text-center">
-                  {safeIncome.extraIncome > 0 ? ((extraExpenses / safeIncome.extraIncome) * 100).toFixed(1) : 0}% utilizado
+                  {income.extraIncome > 0 ? ((extraExpenses / income.extraIncome) * 100).toFixed(1) : 0}% utilizado
                 </div>
               </div>
             </CardContent>
@@ -1022,13 +1012,13 @@ function ExpenseTrackerApp({ onAdminClick }: { onAdminClick: () => void }) {
                 <CardTitle>Todas as Despesas</CardTitle>
               </CardHeader>
               <CardContent>
-                {safeExpenses.length === 0 ? (
+                {expenses.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
                     Nenhuma despesa cadastrada. Clique em "Nova Despesa" para começar.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {safeExpenses.map((expense) => (
+                    {expenses.map((expense) => (
                       <div key={expense.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
